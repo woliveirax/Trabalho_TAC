@@ -30,13 +30,15 @@ dseg	segment para public 'data'
 		contador			db	?
 
 		;Variaveis para gestão do ficheiro de labirinto
-		fname			db	'Teste.txt'
+		fname			db	'Teste.txt',0
 		fhandle			dw	0
-		buffer			db	1600 dup(32)
+		buffer			db	2 dup(32)
 
-		msgErrorCreate	db	"Ocorreu um erro na criacao do ficheiro!$"
-		msgErrorWrite	db	"Ocorreu um erro na escrita para ficheiro!$"
-		msgErrorClose	db	"Ocorreu um erro no fecho do ficheiro!$"
+		msgErrorOpen	db	"Ocorreu um erro na abertura do fichero!$",0
+		msgErrorCreate	db	"Ocorreu um erro na criacao do ficheiro!$",0
+		msgErrorWrite	db	"Ocorreu um erro na escrita para ficheiro!$",0
+		msgErrorClose	db	"Ocorreu um erro no fecho do ficheiro!$",0
+		msgErrorRead	db	"Ocorreu um erro no ao ler do ficheiro!$",0
 
 		;####################################################################################################################
 
@@ -154,41 +156,42 @@ game_cheats endp
 ;Procedure para criar labirinto!
 
 guarda_buffer 	proc
-	
-	mov	bx, 360
-	mov	cx, 800	; Linhas x Colunas
+		push ax
+		
+		mov	bx, 360
+		mov	cx, 800	; Linhas x Colunas
 
-	xor si,si
-	mov	contador,0
-	
-	jmp Obtem_e_escreve
+		xor si,si
+		mov	contador,0
+		
+		jmp Obtem_e_escreve
 
-gambiarra:
-	add	bx,80
-	mov	contador,0
+	gambiarra:
+		add	bx,80
+		mov	contador,0
 
-Obtem_e_escreve:	
-	mov al, byte ptr es:[bx]
-	mov buffer[si], al
+	Obtem_e_escreve:
+		mov al, es:[bx]
+		mov buffer, al
 
-	mov	al, byte ptr es:[bx+1]
-	mov	buffer[si+1], al
-	
-	inc si
-	inc si
+		mov	al, es:[bx+1]
+		mov	buffer, al
+		
+		inc si
+		inc si
 
-	inc	bx
-	inc bx
+		inc	bx
+		inc bx
 
-	inc contador
+		inc contador
 
-	cmp	contador,40
-	je gambiarra
+		cmp	contador,40
+		je gambiarra
 
-	loop Obtem_e_escreve
-fim:
-	pop ax
-	ret
+		loop Obtem_e_escreve
+	fim:
+		pop ax
+		ret
 guarda_buffer	endp
 
 save_to_file	proc
@@ -208,9 +211,8 @@ save_to_file	proc
 
 escreve:
 
-	mov	bx, ax			; para escrever BX deve conter o Handle
+	mov	bx, ax		; para escrever BX deve conter o Handle
 	mov	ah, 40h			; indica que vamos escrever
-
 	lea	dx, buffer		; Vamos escrever o que estiver no endereço DX
 	mov	cx, 1600		; vamos escrever multiplos bytes duma vez só
 	int	21h				; faz a escrita
@@ -220,6 +222,7 @@ escreve:
 	mov	ah, 09h
 	lea	dx, msgErrorWrite
 	int	21h
+	jmp	fim
 
 close:
 	mov	ah,3eh			; indica que vamos fechar
@@ -250,7 +253,7 @@ loop_rows:
 
 		mov		ah, 02h
 		mov		dl, 219
-		int		21H
+		int		21h
 
 		inc		contador
 
@@ -295,9 +298,8 @@ cria_labirinto proc
 		call 	draw_instruct
 		call	draw_limits
 		
-		mov	POSx,22
+		mov	POSx,21
 		mov POSy,3
-
 		
 CICLO:	
 
@@ -422,8 +424,51 @@ altera_top10 endp
 ;########################################################################
 ;Procedure para ler labirinto para o ecrã
 
-guarda_buffer 	proc
-	push ax
+preenche_buffer	proc
+
+		mov	ah,3Dh
+		lea	dx,fname		
+		mov al,0
+		int 21h
+		jnc	guarda
+
+		mov ah,09h
+		lea	dx,msgErrorOpen
+		int 21h
+
+	guarda:
+		mov fhandle,ax
+
+		mov ah,3Fh
+		mov bx,ax
+		lea dx,buffer
+		mov cx,800
+		int 21h
+		jc erro_leitura
+
+	erro_leitura:
+		mov ah,09h
+		lea	dx,msgErrorRead
+		int 21h
+
+	fecha:
+		mov	ah,3eh
+		mov bx,fhandle
+		int 21h
+		jnc fim
+
+		mov ah,09h
+		lea dx,msgErrorClose
+		int 21h
+
+	fim:
+		ret
+
+preenche_buffer	endp
+
+
+insere_buffer 	proc
+	call preenche_buffer
 	
 	mov	bx, 360
 	mov	cx, 800	; Linhas x Colunas
@@ -437,12 +482,13 @@ gambiarra:
 	add	bx,80
 	mov	contador,0
 
-Obtem_e_escreve:	
-	mov al, byte ptr es:[bx]
-	mov buffer[si], al
-
-	mov	al, byte ptr es:[bx+1]
-	mov	buffer[si+1], al
+Obtem_e_escreve:
+	
+	mov al,buffer[si]
+	mov byte ptr es:[bx],al
+	
+	mov	al,buffer[si+1]
+	mov	byte ptr es:[bx+1],al
 	
 	inc si
 	inc si
@@ -456,15 +502,16 @@ Obtem_e_escreve:
 	je gambiarra
 
 	loop Obtem_e_escreve
-fim:
-	pop ax
-	ret
-guarda_buffer	endp
 
+fim:
+	ret
+insere_buffer	endp
 
 
 abre_labirinto proc
-
+	call apaga_ecran
+	call preenche_buffer
+	call insere_buffer
 
 	ret
 abre_labirinto endp
@@ -516,7 +563,7 @@ criaLab:
 		jmp menu_loop
 
 topTen:
-		call top10
+		call abre_labirinto
 		call LE_TECLA
 		jmp menu_loop
 
