@@ -140,19 +140,19 @@ obtem_string macro str
 	mov dx,offset fname
 	int 21h
 
-  								;CHANGE CHR(12) BY '$'.
-	mov si, offset fname + 1 	;NUMBER OF CHARACTERS ENTERED.
-	mov cl, [si] 				;MOVE LENGTH TO CL.
-	mov ch, 0      				;CLEAR CH TO USE CX. 
-	inc cx 						;TO REACH CHR(6).
-	add si, cx 					;NOW SI POINTS TO CHR(12).
+  ;CHANGE CHR(12) BY '$'.
+	mov si, offset fname + 1 ;NUMBER OF CHARACTERS ENTERED.
+	mov cl, [si] ;MOVE LENGTH TO CL.
+	mov ch, 0      ;CLEAR CH TO USE CX. 
+	inc cx ;TO REACH CHR(6).
+	add si, cx ;NOW SI POINTS TO CHR(12).
 	mov al, '$'
-	mov [si], al 				;REPLACE CHR(12) BY '$'.            
+	mov [si], al ;REPLACE CHR(12) BY '$'.            
 
   ;DISPLAY STRING.                   
-    ;mov ah, 9 ;SERVICE TO DISPLAY STRING.
-	;mov dx, offset fname + 2 ;MUST END WITH '$'.
-    ;int 21h
+            ;mov ah, 9 ;SERVICE TO DISPLAY STRING.
+            ;mov dx, offset fname + 2 ;MUST END WITH '$'.
+            ;int 21h
 endm
 
 ;########################################################################
@@ -173,52 +173,35 @@ guarda_labirinto proc
 		
 		mov		ax,0B800h ;0B800h -> endereço para memoria de video 
 		mov		es,ax	  ;colocado em es -> aponta para um sitio menos cs ds ss
+
 		
-		mov	ah, 3ch						; abrir ficheiro para escrita 
-		mov	cx, 00H						; tipo de ficheiro
-		lea	dx, offset fname + 2		; dx contem endereco do nome do ficheiro 
-		int	21h							; abre efectivamente e AX vai ficar com o Handle do ficheiro
-		jnc inicio
-
-		mov	ah,09h
-		lea	dx,msgErrorOpen
-		int 21h
-		call LE_TECLA
-		jmp fim
-
-	inicio:
+		mov	ah, 3ch			; abrir ficheiro para escrita 
+		mov	cx, 00H			; tipo de ficheiro
+		lea	dx, fname		; dx contem endereco do nome do ficheiro 
+		int	21h				; abre efectivamente e AX vai ficar com o Handle do ficheiro
+		mov fhandle,ax
 
 		mov si,320
 
 	ciclo:
-		mov fhandle,ax
 		mov ax,es:[si]
 		add si,2
 		
 		mov buffer,ax
 		mov	bx, fhandle		; para escrever BX deve conter o Handle 
 		mov	ah, 40h			; indica que vamos escrever 
+			
 		lea	dx, buffer		;ax ->al Vamos escrever o que estiver no endereço DX
 		mov	cx, 2			;2 vamos escrever multiplos bytes duma vez só
-		int	21h				; faz a escrita 		
-		jc	erro_escrita
+		int	21h				; faz a escrita 	
 
 		cmp si,3840
 		jne ciclo
-	
-	erro_escrita:
-		mov	ah,09h
-		lea dx,msgErrorWrite
-		int 21h
-		call LE_TECLA
 
-	fechar:
 		mov	ah,3eh			; indica que vamos fechar
-		mov bx,fhandle		; passa o handle do ficheiro para bx
 		int	21h				; fecha mesmo
 							; se não acontecer erro termina
-	fim:
-		;call apaga_ecran
+		call apaga_ecran
 		ret
 guarda_labirinto endp
 
@@ -457,7 +440,7 @@ edita_labirinto endp
 abre_labirinto proc
 		mov     ah,3dh
 		mov     al,0
-		lea     dx,offset fname  + 2  ;ALTEREI AQUI
+		lea     dx,fname 		;ALTEREI AQUI
 		int     21h				; Chama a rotina de abertura de ficheiro (AX fica com Handle)
 		mov     fhandle,ax
 
@@ -470,7 +453,7 @@ abre_labirinto proc
 		mov     cx, 2			; vai ler 2 byte de cada vez
 		lea     dx, buffer		; DX fica a apontar para o caracter lido
 		int     21h				; le 2 caracteres do ficheiro
-		mov		ax, buffer
+		mov		ax,buffer
 		
 		mov 	es:[si],ax
 		add		si,2
