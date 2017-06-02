@@ -126,9 +126,9 @@ apaga_ecran	endp
 ;########################################################################
 ;							Funcoes do jogo
 ;########################################################################
+;Pede string ao utilizador
 
 obtem_string macro str
-
 	call apaga_ecran
 	goto_xy	24,10
 	mov ah,09h
@@ -139,8 +139,7 @@ obtem_string macro str
 	mov ah, 0Ah
 	mov dx,offset fname
 	int 21h
-
-  								;CHANGE CHR(12) BY '$'.
+	
 	mov si, offset fname + 1 	;NUMBER OF CHARACTERS ENTERED.
 	mov cl, [si] 				;MOVE LENGTH TO CL.
 	mov ch, 0      				;CLEAR CH TO USE CX. 
@@ -149,12 +148,7 @@ obtem_string macro str
 	mov al, '$'
 	mov [si], al 				;REPLACE CHR(12) BY '$'.            
 
-  ;DISPLAY STRING.                   
-    ;mov ah, 9 ;SERVICE TO DISPLAY STRING.
-	;mov dx, offset fname + 2 ;MUST END WITH '$'.
-    ;int 21h
 endm
-
 ;########################################################################
 ;Procedure do jogo normal!
 
@@ -171,15 +165,18 @@ game endp
 
 guarda_labirinto proc
 		
-		mov		ax,0B800h ;0B800h -> endereço para memoria de video 
-		mov		es,ax	  ;colocado em es -> aponta para um sitio menos cs ds ss
+		mov	ax,0B800h ;0B800h -> endereço para memoria de video 
+		mov	es,ax	  ;colocado em es -> aponta para um sitio menos cs ds ss
 		
 		mov	ah, 3ch						; abrir ficheiro para escrita 
 		mov	cx, 00H						; tipo de ficheiro
 		lea	dx, offset fname + 2		; dx contem endereco do nome do ficheiro 
-		int	21h							; abre efectivamente e AX vai ficar com o Handle do ficheiro
+		int	21h	
+		mov fhandle,ax					; abre efectivamente e AX vai ficar com o Handle do ficheiro
 		jnc inicio
 
+		call apaga_ecran
+		goto_xy	20,10
 		mov	ah,09h
 		lea	dx,msgErrorOpen
 		int 21h
@@ -187,11 +184,9 @@ guarda_labirinto proc
 		jmp fim
 
 	inicio:
-
 		mov si,320
 
 	ciclo:
-		mov fhandle,ax
 		mov ax,es:[si]
 		add si,2
 		
@@ -205,8 +200,11 @@ guarda_labirinto proc
 
 		cmp si,3840
 		jne ciclo
+		jmp fechar
 	
 	erro_escrita:
+		call apaga_ecran
+		goto_xy	20,10
 		mov	ah,09h
 		lea dx,msgErrorWrite
 		int 21h
@@ -455,22 +453,33 @@ edita_labirinto endp
 ;Procedure para ler labirinto para o ecrã
 
 abre_labirinto proc
-		mov     ah,3dh
-		mov     al,0
-		lea     dx,offset fname  + 2  ;ALTEREI AQUI
-		int     21h				; Chama a rotina de abertura de ficheiro (AX fica com Handle)
-		mov     fhandle,ax
-
+		mov ah,3dh				 ; indica que vai abrir um ficheiro
+		mov al,0				 ; indica que o ficheiro sera aberto em modo de leitura
+		lea dx,offset fname  + 2 ; passa o nome do ficheiro para dentro de dx
+		int 21h					 ; Chama a rotina de abertura de ficheiro (AX fica com Handle)
+		mov fhandle,ax			 ; passa handle do ficheiro que esta em AX para a variavel fhandle
+		jnc inicio				 ; se nao houver erro salta para inicio da funcao.
 		
+		call apaga_ecran
+		goto_xy	20,10
+		mov	ah,09h
+		lea	dx,msgErrorOpen
+		int 21h
+		call LE_TECLA
+		jmp fim
+
+
+	inicio:
 		mov si,320
 
 	ciclo:	
-		mov    	ah, 3fh
-		mov     bx, fhandle
-		mov     cx, 2			; vai ler 2 byte de cada vez
-		lea     dx, buffer		; DX fica a apontar para o caracter lido
-		int     21h				; le 2 caracteres do ficheiro
-		mov		ax, buffer
+		mov ah, 3fh
+		mov bx, fhandle
+		mov cx, 2			; vai ler 2 byte de cada vez
+		lea dx, buffer		; DX fica a apontar para o caracter lido
+		int 21h				; le 2 caracteres do ficheiro
+		mov ax, buffer
+		jc erro_leitura
 		
 		mov 	es:[si],ax
 		add		si,2
@@ -478,11 +487,20 @@ abre_labirinto proc
 		cmp si,3840
 		jne ciclo
 
+	erro_leitura:
+		call apaga_ecran
+		goto_xy	20,10
+		mov	ah,09h
+		lea	dx,msgErrorRead
+		int 21h
+		call LE_TECLA
+
 	fecha_ficheiro:
 		mov     ah,3eh
 		mov     bx,fhandle
 		int     21h
-
+	
+	fim:
 		ret
 
 abre_labirinto endp
