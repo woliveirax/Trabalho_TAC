@@ -182,18 +182,22 @@ valida_pos endp
 ;importa labirinto
 jogo proc
 
+			call apaga_ecran
+			call abre_labirinto
+			
+
 			goto_xy	POSx,POSy	; Vai para nova possi��o
 			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
 			mov	bh, 0			; numero da p�gina
 			int	10h
-			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+			mov	Car, ' '		; Guarda o Caracter que est� na posi��o do Cursor
 			;mov	Cor, ah			; Guarda a cor que est� na posi��o do Cursor
 			
 	CICLO:
 			
 			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
 			mov	ah, 02h
-			mov	dl, Car			; Repoe Caracter guardado
+			mov	dl, Car		; Repoe Caracter guardado
 			int	21h
 
 			goto_xy	POSx,POSy	; Vai para nova possi��o
@@ -209,7 +213,28 @@ jogo proc
 			;int	21H
 
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+			
+			cmp Car,' '
+			jne movimento
+			jmp IMPRIME
 
+	movimento:
+			goto_xy	POSxa,POSya
+
+			mov al,POSxa
+			mov POSx,al
+			mov al, POSya
+			mov POSy,al
+			jmp imprime
+
+
+			mov ah, 02h ; imprime carater
+			mov dl,Car
+			int 21H
+
+
+
+	goto_xy POSx,POSy
 	IMPRIME:	
 			mov	ah, 02h
 			mov	dl, 190			; Coloca AVATAR
@@ -233,27 +258,27 @@ jogo proc
 			cmp al,48h			; Cima
 			jne	BAIXO
 			dec	POSy
-			call valida_pos
+			;call valida_pos
 			jmp	CICLO
 
 	BAIXO:	cmp	al,50h			; Baixo
 			jne	ESQUERDA
 			inc POSy
-			call valida_pos
+			;call valida_pos
 			jmp	CICLO
 
 	ESQUERDA:
 			cmp	al,4Bh			; Esquerda
 			jne	DIREITA
 			dec	POSx
-			call valida_pos
+			;call valida_pos
 			jmp	CICLO
 
 	DIREITA:
 			cmp	al,4Dh			; Direita
 			jne	LER_SETA
 			inc POSx
-			call valida_pos
+			;call valida_pos
 			jmp	CICLO
 
 	fim:
