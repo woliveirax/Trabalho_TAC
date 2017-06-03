@@ -62,10 +62,8 @@ dseg	segment para public 'data'
 		;Variaveis do jogo
 
 		Cor			db	7	; Guarda os atributos de cor do caracter
-		POSya		db	0	; Posi��o anterior de y
-		POSxa		db	0	; Posi��o anterior de x
-		tPOSy		db	0	;
-		tPOSx		db	0	;
+		POSya		db	3	; Posi��o anterior de y
+		POSxa		db	22	; Posi��o anterior de x
 		nome_jogar	db	12 dup(?) 	; nome do utilizador
 
 
@@ -163,35 +161,32 @@ endm
 ;########################################################################
 ;Procedure do jogo normal!
 
-valida_pos proc
-		push bx
-		
-		mov	ah,08h 		; le o caractere que esta na posicao do cursor
-		mov bh,0		;
-		int 10h			;
+get_nextPos proc
+	goto_xy POSx,POSy
 
-		cmp	al,32			;compara o caractere recebido com espaço
-
-		
-	fim:
-		pop bx
-		ret
-
-valida_pos endp
+	mov ah,08h
+	mov bh,0
+	int 10h
+	
+	ret
+get_nextPos endp
 
 ;importa labirinto
 jogo proc
-
+			obtem_string	msgAskFich
 			call apaga_ecran
 			call abre_labirinto
-			
+
+			mov POSx,22
+			mov POSy,3
 
 			goto_xy	POSx,POSy	; Vai para nova possi��o
 			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
 			mov	bh, 0			; numero da p�gina
 			int	10h
-			mov	Car, ' '		; Guarda o Caracter que est� na posi��o do Cursor
+			mov	Car, al		; Guarda o Caracter que est� na posi��o do Cursor
 			;mov	Cor, ah			; Guarda a cor que est� na posi��o do Cursor
+
 			
 	CICLO:
 			
@@ -207,10 +202,10 @@ jogo proc
 			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
 			;mov	Cor, ah			; Guarda a cor que est� na posi��o do Cursor
 		    
-			;goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
-			;mov	ah, 02h			; IMPRIME caracter da posi��o no canto
-			;mov	dl, Car
-			;int	21H
+			goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
+			mov	ah, 02h			; IMPRIME caracter da posi��o no canto
+			mov	dl, Car
+			int	21H
 
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 			
@@ -225,20 +220,14 @@ jogo proc
 			mov POSx,al
 			mov al, POSya
 			mov POSy,al
+			
 			jmp imprime
 
-
-			mov ah, 02h ; imprime carater
-			mov dl,Car
-			int 21H
-
-
-
-	goto_xy POSx,POSy
 	IMPRIME:	
 			mov	ah, 02h
 			mov	dl, 190			; Coloca AVATAR
 			int	21H
+			
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 
 			mov	al, POSx		; Guarda a posi��o do cursor
@@ -246,39 +235,66 @@ jogo proc
 			mov	al, POSy		; Guarda a posi��o do cursor
 			mov POSya, al
 
-	LER_SETA:	
+	LER_SETA:
 			call LE_TECLA
+
 			cmp	ah, 1
 			je	ESTEND
+
 			cmp AL, 27			; ESCAPE
 			je	FIM
+
 			jmp	LER_SETA
 
 	ESTEND:	
 			cmp al,48h			; Cima
 			jne	BAIXO
+
+			cmp POSy,3
+			je	LER_SETA
+			
 			dec	POSy
-			;call valida_pos
+			call get_nextPos
+			cmp al,32
+			jne movimento
 			jmp	CICLO
 
 	BAIXO:	cmp	al,50h			; Baixo
 			jne	ESQUERDA
+
+			cmp POSy,22
+			je	LER_SETA
+
 			inc POSy
-			;call valida_pos
+			call get_nextPos
+			cmp al,32
+			jne movimento
 			jmp	CICLO
 
 	ESQUERDA:
 			cmp	al,4Bh			; Esquerda
 			jne	DIREITA
+
+			cmp POSx,20
+			je LER_SETA
+
 			dec	POSx
-			;call valida_pos
+			call get_nextPos
+			cmp al,32
+			jne movimento
 			jmp	CICLO
 
 	DIREITA:
 			cmp	al,4Dh			; Direita
 			jne	LER_SETA
+
+			cmp POSx,59
+			je	LER_SETA
+
 			inc POSx
-			;call valida_pos
+			call get_nextPos
+			cmp al,32
+			jne movimento
 			jmp	CICLO
 
 	fim:
@@ -591,9 +607,7 @@ abre_labirinto proc
 		mov	ah,09h					;
 		lea	dx,msgErrorOpen			;
 		int 21h						;
-		call LE_TECLA				;
 		jmp fim						;##################################################
-
 
 	inicio:
 		mov si,320				
@@ -606,12 +620,13 @@ abre_labirinto proc
 		int 21h				; le 2 caracteres do ficheiro
 		mov ax, buffer		; mete buffer em ax para voltar posicionalos no ecra
 		jc erro_leitura		; se houver erro vai mostrar o erro de leitura
-		
+
 		mov 	es:[si],ax	; coloca conteudo de ax no ecra
 		add		si,2		; vai para a proxima posicao do ecra
 
 		cmp si,3840			; repete o codigo do ciclo até que a posicao do ecra seja 3840
-		jne ciclo			
+		jne ciclo
+		jmp fecha_ficheiro			
 
 	erro_leitura:
 		call apaga_ecran
