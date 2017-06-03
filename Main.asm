@@ -4,8 +4,8 @@
 
 dseg	segment para public 'data'
 		
-		POSy		db	5	; a linha pode ir de [1 .. 25]
-		POSx		db	10	; POSx pode ir [1..80]
+		POSy		db	0	; a linha pode ir de [1 .. 25]
+		POSx		db	0	; POSx pode ir [1..80]
 
 		;####################################################################################################################
 		;Variaveis relativas ao MENUS
@@ -51,12 +51,23 @@ dseg	segment para public 'data'
    				db ?
    				db 12 dup(0)
 		
-		
+
 		msgErrorOpen	db	"Ocorreu um erro na abertura do fichero!$",0
 		msgErrorCreate	db	"Ocorreu um erro na criacao do ficheiro!$",0
 		msgErrorWrite	db	"Ocorreu um erro na escrita para ficheiro!$",0
 		msgErrorClose	db	"Ocorreu um erro no fecho do ficheiro!$",0
 		msgErrorRead	db	"Ocorreu um erro no ao ler do ficheiro!$",0
+
+		;####################################################################################################################
+		;Variaveis do jogo
+
+		Cor			db	7	; Guarda os atributos de cor do caracter
+		POSya		db	0	; Posi��o anterior de y
+		POSxa		db	0	; Posi��o anterior de x
+		tPOSy		db	0	;
+		tPOSx		db	0	;
+		nome_jogar	db	12 dup(?) 	; nome do utilizador
+
 
 		;####################################################################################################################
 
@@ -152,13 +163,103 @@ endm
 ;########################################################################
 ;Procedure do jogo normal!
 
-game proc
-	mov ah,09h
-	lea dx,game_placeholder
-	int 21h
+valida_pos proc
+		push bx
+		
+		mov	ah,08h 		; le o caractere que esta na posicao do cursor
+		mov bh,0		;
+		int 10h			;
 
-	ret
-game endp
+		cmp	al,32			;compara o caractere recebido com espaço
+
+		
+	fim:
+		pop bx
+		ret
+
+valida_pos endp
+
+;importa labirinto
+jogo proc
+
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
+			mov	bh, 0			; numero da p�gina
+			int	10h
+			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+			;mov	Cor, ah			; Guarda a cor que est� na posi��o do Cursor
+			
+	CICLO:
+			
+			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+			mov	ah, 02h
+			mov	dl, Car			; Repoe Caracter guardado
+			int	21h
+
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov ah, 08h
+			mov	bh,0			; numero da p�gina
+			int	10h
+			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+			;mov	Cor, ah			; Guarda a cor que est� na posi��o do Cursor
+		    
+			;goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
+			;mov	ah, 02h			; IMPRIME caracter da posi��o no canto
+			;mov	dl, Car
+			;int	21H
+
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+
+	IMPRIME:	
+			mov	ah, 02h
+			mov	dl, 190			; Coloca AVATAR
+			int	21H
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+
+			mov	al, POSx		; Guarda a posi��o do cursor
+			mov	POSxa, al
+			mov	al, POSy		; Guarda a posi��o do cursor
+			mov POSya, al
+
+	LER_SETA:	
+			call LE_TECLA
+			cmp	ah, 1
+			je	ESTEND
+			cmp AL, 27			; ESCAPE
+			je	FIM
+			jmp	LER_SETA
+
+	ESTEND:	
+			cmp al,48h			; Cima
+			jne	BAIXO
+			dec	POSy
+			call valida_pos
+			jmp	CICLO
+
+	BAIXO:	cmp	al,50h			; Baixo
+			jne	ESQUERDA
+			inc POSy
+			call valida_pos
+			jmp	CICLO
+
+	ESQUERDA:
+			cmp	al,4Bh			; Esquerda
+			jne	DIREITA
+			dec	POSx
+			call valida_pos
+			jmp	CICLO
+
+	DIREITA:
+			cmp	al,4Dh			; Direita
+			jne	LER_SETA
+			inc POSx
+			call valida_pos
+			jmp	CICLO
+
+	fim:
+		ret
+
+jogo endp
 
 ;########################################################################
 ;Procedure para criar labirinto!
@@ -453,39 +554,39 @@ edita_labirinto endp
 ;Procedure para ler labirinto para o ecrã
 
 abre_labirinto proc
-		mov ah,3dh				 ; indica que vai abrir um ficheiro
-		mov al,0				 ; indica que o ficheiro sera aberto em modo de leitura
-		lea dx,offset fname  + 2 ; passa o nome do ficheiro para dentro de dx
-		int 21h					 ; Chama a rotina de abertura de ficheiro (AX fica com Handle)
-		mov fhandle,ax			 ; passa handle do ficheiro que esta em AX para a variavel fhandle
-		jnc inicio				 ; se nao houver erro salta para inicio da funcao.
-		
-		call apaga_ecran
-		goto_xy	20,10
-		mov	ah,09h
-		lea	dx,msgErrorOpen
-		int 21h
-		call LE_TECLA
-		jmp fim
+		mov ah,3dh				 	; indica que vai abrir um ficheiro
+		mov al,0				 	; indica que o ficheiro sera aberto em modo de leitura
+		lea dx,offset fname  + 2 	; passa o nome do ficheiro para dentro de dx
+		int 21h					 	; Chama a rotina de abertura de ficheiro (AX fica com Handle)
+		mov fhandle,ax				; passa handle do ficheiro que esta em AX para a variavel fhandle
+		jnc inicio					; se nao houver erro salta para inicio da funcao.
+
+		call apaga_ecran			;##################################################
+		goto_xy	20,10				;Apaga o ecrã e mostra mensagem de erro ao abrir
+		mov	ah,09h					;
+		lea	dx,msgErrorOpen			;
+		int 21h						;
+		call LE_TECLA				;
+		jmp fim						;##################################################
 
 
 	inicio:
-		mov si,320
+		mov si,320				
 
 	ciclo:	
-		mov ah, 3fh
-		mov bx, fhandle
+		mov ah, 3fh			; diz que vai ler o ficheiro
+		mov bx, fhandle		; passa o handle do ficheiro para bx
 		mov cx, 2			; vai ler 2 byte de cada vez
 		lea dx, buffer		; DX fica a apontar para o caracter lido
 		int 21h				; le 2 caracteres do ficheiro
-		mov ax, buffer
-		jc erro_leitura
+		mov ax, buffer		; mete buffer em ax para voltar posicionalos no ecra
+		jc erro_leitura		; se houver erro vai mostrar o erro de leitura
 		
-		mov 	es:[si],ax
-		add		si,2
+		mov 	es:[si],ax	; coloca conteudo de ax no ecra
+		add		si,2		; vai para a proxima posicao do ecra
 
-		cmp si,3840
-		jne ciclo
+		cmp si,3840			; repete o codigo do ciclo até que a posicao do ecra seja 3840
+		jne ciclo			
 
 	erro_leitura:
 		call apaga_ecran
@@ -496,9 +597,9 @@ abre_labirinto proc
 		call LE_TECLA
 
 	fecha_ficheiro:
-		mov     ah,3eh
-		mov     bx,fhandle
-		int     21h
+		mov     ah,3eh		; indica que vai fechar o ficheiro
+		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
+		int     21h			; fecha o ficheiro
 	
 	fim:
 		ret
@@ -608,7 +709,7 @@ main_menu proc
 			jmp menu_loop
 
 	gameNormal:
-			call game
+			call jogo
 			call LE_TECLA
 			jmp	menu_loop
 
