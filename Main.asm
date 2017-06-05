@@ -34,7 +34,7 @@ dseg	segment para public 'data'
 		;####################################################################################################################
 		;Variaveis para o menu de criacao de labirintos.
 		car		db	?
-		cria_lab_instrucoes	db	'	1 - ',219,'	2 - ',178,'	3 - ',177,'	4 - ',176,'	5 - apaga  g - Guarda  ESC - Sair',13,10
+		cria_lab_instrucoes	db	' 1 - ',219,' 2 - ',178,' 3 - ',177,' 4 - ',176,' 5 - apaga  6 - Inicio  7 - fim  g - Guarda  ESC - Sair',13,10
 							db	80 dup('-'),'$',0
 		contador			db	?
 
@@ -66,11 +66,19 @@ dseg	segment para public 'data'
 		POSxa		db	22	; Posi��o anterior de x
 		nome_jogar	db	12 dup(?) 	; nome do utilizador
 
+		menuJogo	db	'	| Direita ',16,' |  Esquerda ',17,' | Cima ',30,' | Baixo ',31,' | ESC - Desistir |$',0
+
+		verificax	db 	0
+		verificay	db	0
+
+		msgErrorInicio 	db	'Nao existe um inicio no labirinto selecionado!$'
+		msgErrorFim		db	'Nao existe um fim no labirinto selecionado!$'
+		msgErrorOpenMap	db	'Nao foi possivel abrir o labirinto!$'
+		msgGanhou		db	'Ganhou!$'
 		
-		;********************************************************************************
-		;  						Variaveis para Horas   
-		;********************************************************************************
-	
+		;####################################################################################################################
+		;Variaveis do temporizador
+
 		STR12	 		DB 		"            "					; String para 12 digitos	
 		NUMERO			DB		"                    $" 		; String destinada a guardar o número lido
 		NUM_SP			db		"                    $" 		; PAra apagar zona de ecran
@@ -185,7 +193,7 @@ Ler_TEMPO ENDP
 ; AL DEVOLVE O CÓDIGO DA TECLA PREMIDA
 ;************************************************************************
 
-LE_TECLA proc	
+LE_TECLA proc
 
 		cmp	ah,0
 		je	espera_tecla
@@ -220,7 +228,6 @@ LE_TECLA endp
 
 ;########################################################################
 ;			  ---	começa a contar o tempo de jogo do zero  ---
-;########################################################################
 
 ; aqui incrementa o tempo a começar do zero;
 Incrementa_Segundos PROC
@@ -250,7 +257,7 @@ Incrementa_Segundos ENDP
 
 ;########################################################################
 ;			  ---	começa a contar o tempo de jogo do zero  ---
-;########################################################################
+
 Trata_Horas PROC
 
 			PUSHF
@@ -344,8 +351,134 @@ obtem_string macro str
 
 endm
 
+obtem_string_jogador macro str
+	call apaga_ecran
+	
+	goto_xy	24,10
+	mov ah,09h
+	lea dx,str
+	int 21h
+	goto_xy	34,11
+
+	mov ah, 0Ah
+	mov dx,offset fname
+	int 21h
+	
+	mov si, offset fname + 1 	;NUMBER OF CHARACTERS ENTERED.
+	mov cl, [si] 				;MOVE LENGTH TO CL.
+	mov ch, 0      				;CLEAR CH TO USE CX. 
+	inc cx 						;TO REACH CHR(6).
+	add si, cx 					;NOW SI POINTS TO CHR(12).
+	mov al, ' '
+	mov [si], al 				;REPLACE CHR(12) BY '$'.
+endm
+
+
 ;########################################################################
 ;Procedure do jogo normal!
+
+; Inicia jogo
+; Mostra instrucoes
+; encontra ponto de inicio e posiciona cursor
+
+obtem_car_ecra proc
+	mov ah,08h
+	mov bh,0
+	int 10h
+
+	ret
+obtem_car_ecra endp
+
+encontra_inicio proc
+
+		mov verificax,20
+		mov verificay,3
+
+	ciclo:
+		goto_xy verificax,verificay
+		call obtem_car_ecra
+
+		cmp al,73
+		je	fim_sucesso
+
+		cmp verificax,60
+		je	resetx
+
+		cmp verificay,23
+		je 	fim
+
+		inc	verificax
+
+		jmp ciclo
+
+	resetx:
+		mov verificax,20
+		inc verificay
+		jmp ciclo
+
+	fim_sucesso:
+		mov	al,verificax
+		mov POSx,al
+
+		mov al,verificay
+		mov POSy,al
+
+		mov ah,0
+		call LE_TECLA
+
+		mov	al,0
+		jmp fim
+
+	fim_erro:
+		mov al,1		; se estiver a 0 
+	fim:
+		ret
+encontra_inicio endp
+
+encontra_fim proc
+
+		mov verificax,20
+		mov verificay,3
+
+	ciclo:
+		goto_xy verificax,verificay
+		call obtem_car_ecra
+
+		cmp al,70
+		je	fim_sucesso
+
+		cmp verificax,60
+		je	resetx
+
+		cmp verificay,23
+		je 	fim
+
+		inc	verificax
+		
+		jmp ciclo
+
+	resetx:
+		mov verificax,20
+		inc verificay
+		jmp ciclo
+
+	fim_sucesso:
+		mov	al,0
+		jmp fim
+
+	fim_erro:
+		mov al,1		; se al estiver a 0 encontrou fim, se for 1 é por que nao encontrou e tem que sair do jogo
+	fim:
+		ret
+encontra_fim endp
+
+draw_instruct_jogo proc
+
+	goto_xy	0,0
+	MOSTRA	menuJogo
+
+	ret
+draw_instruct_jogo endp
 
 get_nextPos proc
 	goto_xy POSx,POSy
@@ -357,14 +490,40 @@ get_nextPos proc
 	ret
 get_nextPos endp
 
-;importa labirinto
 jogo proc
+			; mostra menu com uma lista de X labirintos já existentes.
+			; pede a escolha ao utilizador
+
+			; verifica se o labirinto obtino na string existe, se existir:
+			; vai carregar o que o utilizador utilizou, se nao utiliza o labirinto por omissao.
+			
+			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
+			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
+
 			obtem_string	msgAskFich
 			call apaga_ecran
-			call abre_labirinto
+			call draw_instruct_jogo
 
-			mov POSx,22
-			mov POSy,3
+			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
+			call abre_labirinto
+			cmp al,1
+			je erro_abrir_labirinto
+
+			;verifica se o labirinto contem inicio em fim
+			call encontra_inicio
+			cmp	al,1
+			je	erro_encontra_inicio
+
+			call encontra_fim
+			cmp al,1
+			je	erro_encontra_fim
+			
+			;Inicializa posicoes anteriores ( pois no inicio do jogo nao existem posicoes anteriores )
+			mov al,POSx
+			mov POSxa,al
+
+			mov al,POSy
+			mov POSya,al
 
 			goto_xy	POSx,POSy	; Vai para nova possi��o
 			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
@@ -376,7 +535,7 @@ jogo proc
 			
 			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
 			mov	ah, 02h
-			mov	dl, Car		; Repoe Caracter guardado
+			mov	dl, Car			; Repoe Caracter guardado
 			int	21h
 
 			goto_xy	POSx,POSy	; Vai para nova possi��o
@@ -437,11 +596,12 @@ jogo proc
 			cmp POSy,3
 			je	LER_SETA
 
-			cmp	POSy,70
-			je	ganhou
-
 			dec	POSy
 			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
 			cmp al,32
 			jne movimento
 			jmp	CICLO
@@ -452,29 +612,33 @@ jogo proc
 			cmp POSy,22
 			je	LER_SETA
 
-			cmp	POSy,70
-			je	ganhou
-
 			inc POSy
 			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
 			cmp al,32
 			jne movimento
+
 			jmp	CICLO
 
 	ESQUERDA:
 			cmp	al,4Bh			; Esquerda
 			jne	DIREITA
 
-			cmp	POSy,70
-			je	ganhou
-
 			cmp POSx,20
 			je LER_SETA
 			
 			dec	POSx
 			call get_nextPos
+
+			cmp	al,70
+			je	ganhou
+
 			cmp al,32
 			jne movimento
+
 			jmp	CICLO
 
 	DIREITA:
@@ -484,17 +648,55 @@ jogo proc
 			cmp POSx,59
 			je	LER_SETA
 
-			cmp	POSy,70
-			je	ganhou
-
 			inc POSx
 			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
 			cmp al,32
 			jne movimento
+
 			jmp	CICLO
 
+	
+	erro_encontra_inicio:
+			;call apaga_ecran
+			goto_xy 15,10
+			MOSTRA	msgErrorInicio
+
+			mov	ah,0
+			call LE_TECLA
+			
+			jmp fim
+
+	erro_encontra_fim:
+			;call apaga_ecran
+			MOSTRA	msgErrorFim
+						
+			mov ah,0
+			call LE_TECLA
+
+			jmp fim
+
+	erro_abrir_labirinto:
+			;call apaga_ecra
+			
+			mov ah,0
+			call LE_TECLA
+
+			jmp fim
+
 	ganhou:
-	;falta isto
+			;call apaga_ecran
+			goto_xy	15,10
+			MOSTRA msgGanhou
+
+			goto_xy 15,11
+			;MOSTRA tempoFim
+			
+			mov	ah,0
+			call LE_TECLA
 	fim:
 		ret
 
@@ -592,6 +794,7 @@ cria_labirinto proc
 			int		21H
 			goto_xy	POSx,POSy
 			
+			mov 	ah,0
 			call 	LE_TECLA
 
 			cmp		ah, 1
@@ -624,10 +827,21 @@ cria_labirinto proc
 
 	CINCO:	
 			cmp 	al, 53			; Tecla 5
-			jne		GUARDA
+			jne		SEIS
 			mov		Car, 32			; espaço
 			jmp		CICLO	
 
+	SEIS:
+			cmp 	al,54			; Tecla 6
+			jne 	SEVEN
+			mov 	Car,73			; I
+			jmp		CICLO
+
+	SEVEN:
+			cmp 	al,55			; Tecla 7
+			jne		GUARDA
+			mov		Car,70			; F	
+			jmp 	CICLO
 
 	GUARDA:	
 			cmp		al,103
@@ -810,6 +1024,8 @@ abre_labirinto proc
 		mov	ah,09h					;
 		lea	dx,msgErrorOpen			;
 		int 21h						;
+
+		mov al,1
 		jmp fim						;##################################################
 
 	inicio:
@@ -838,19 +1054,36 @@ abre_labirinto proc
 		lea	dx,msgErrorRead
 		int 21h
 
+		xor ax,ax
+		mov al,1
+		push ax
+		
 		mov ah,0
 		call LE_TECLA
+
+		jmp fim_erro_leitura
 
 	fecha_ficheiro:
 		mov     ah,3eh		; indica que vai fechar o ficheiro
 		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
 		int     21h			; fecha o ficheiro
+
+		jmp		fim
 	
+	fim_erro_leitura:
+		mov     ah,3eh		; indica que vai fechar o ficheiro
+		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
+		int     21h			; fecha o ficheiro
+
+		pop ax
+		jmp fim
+
+	fim_sucesso:
+		mov al,0
 	fim:
 		ret
 
 abre_labirinto endp
-
 
 ;########################################################################
 ;Procedure para mostrar top 10

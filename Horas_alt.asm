@@ -20,6 +20,8 @@ dseg	segment para public 'data'
 		Game_Time_s		dw		0								; segundos
 		Game_Time_m		dw		0								; minutos
 		Game_Time_h		dw		0								; horas
+		POSx			db		0
+		POSy			db		0
 
 		;####################################################################################################################
 
@@ -35,6 +37,30 @@ MOSTRA MACRO str
 	int 21h
 
 endm
+
+
+goto_xy	macro	POSx,POSy
+		mov		ah,02h	;indica que é para mudar o cursor.
+		mov		bh,0	;Numero página.
+		mov		dl,POSx	;Pos X do ecrã, vai de 0 a 80
+		mov		dh,POSy ;Pos Y do ecrã, vai de 0 a 25
+		int		10h		;interrupt call
+endm
+
+
+
+apaga_ecran	proc
+			xor		bx,bx
+			mov		cx,25*80
+
+	apaga:
+			mov		byte ptr es:[bx],' '
+			mov		byte ptr es:[bx+1],7
+			inc		bx
+			inc 	bx
+			loop	apaga
+			ret
+apaga_ecran	endp
 
 ;########################################################################
 ;                          Rotinas de TEMPO 
@@ -211,3 +237,23 @@ Trata_Horas PROC
 			
 
 Trata_Horas ENDP
+
+
+Main  proc
+		mov		ax, dseg
+		mov		ds,ax
+
+		mov 	ax,0B800h	;move o ponteiro para memoria de video para ax
+		mov		es,ax		;move o ponteiro para memoria de video de ax para ES
+
+		call 	apaga_ecran
+		
+		mov 	ah,1
+		call	LE_TECLA
+	fim:
+		mov		ah,4CH
+		int		21H
+
+Main	endp
+Cseg	ends
+end	Main
