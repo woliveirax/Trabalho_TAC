@@ -50,8 +50,16 @@ dseg	segment para public 'data'
 		fname	db 12
    				db ?
    				db 12 dup(0)
-		
 
+		
+		jname	db 12
+   				db ?
+   				db 12 dup(0)
+
+		
+		default db 'def.txt',0
+		
+		msgErrorName	db	"Nome de jogador invalido!$",0
 		msgErrorOpen	db	"Ocorreu um erro na abertura do fichero!$",0
 		msgErrorCreate	db	"Ocorreu um erro na criacao do ficheiro!$",0
 		msgErrorWrite	db	"Ocorreu um erro na escrita para ficheiro!$",0
@@ -346,14 +354,14 @@ obtem_string macro str
 	mov ch, 0      				;CLEAR CH TO USE CX. 
 	inc cx 						;TO REACH CHR(6).
 	add si, cx 					;NOW SI POINTS TO CHR(12).
-	mov al, '$'
+	mov al, ' '
 	mov [si], al 				;REPLACE CHR(12) BY '$'.            
 
 endm
 
-obtem_string_jogador macro str
+obtem_string_nome_jogador macro str
 	call apaga_ecran
-	
+
 	goto_xy	24,10
 	mov ah,09h
 	lea dx,str
@@ -361,10 +369,10 @@ obtem_string_jogador macro str
 	goto_xy	34,11
 
 	mov ah, 0Ah
-	mov dx,offset fname
+	mov dx,offset jname
 	int 21h
 	
-	mov si, offset fname + 1 	;NUMBER OF CHARACTERS ENTERED.
+	mov si, offset jname + 1 	;NUMBER OF CHARACTERS ENTERED.
 	mov cl, [si] 				;MOVE LENGTH TO CL.
 	mov ch, 0      				;CLEAR CH TO USE CX. 
 	inc cx 						;TO REACH CHR(6).
@@ -372,7 +380,6 @@ obtem_string_jogador macro str
 	mov al, ' '
 	mov [si], al 				;REPLACE CHR(12) BY '$'.
 endm
-
 
 ;########################################################################
 ;Procedure do jogo normal!
@@ -405,7 +412,7 @@ encontra_inicio proc
 		je	resetx
 
 		cmp verificay,23
-		je 	fim
+		je 	fim_erro
 
 		inc	verificax
 
@@ -423,14 +430,12 @@ encontra_inicio proc
 		mov al,verificay
 		mov POSy,al
 
-		mov ah,0
-		call LE_TECLA
-
 		mov	al,0
 		jmp fim
 
 	fim_erro:
-		mov al,1		; se estiver a 0 
+		mov al,1
+
 	fim:
 		ret
 encontra_inicio endp
@@ -451,7 +456,7 @@ encontra_fim proc
 		je	resetx
 
 		cmp verificay,23
-		je 	fim
+		je 	fim_erro
 
 		inc	verificax
 		
@@ -468,10 +473,12 @@ encontra_fim proc
 
 	fim_erro:
 		mov al,1		; se al estiver a 0 encontrou fim, se for 1 é por que nao encontrou e tem que sair do jogo
+
 	fim:
 		ret
 encontra_fim endp
 
+; Mostra instruções do jogo
 draw_instruct_jogo proc
 
 	goto_xy	0,0
@@ -491,6 +498,13 @@ get_nextPos proc
 get_nextPos endp
 
 jogo proc
+
+	restart:
+			; Reinicia o contador do jogo
+			mov Game_Time_h,0
+			mov Game_Time_m,0
+			mov Game_Time_s,0
+
 			; mostra menu com uma lista de X labirintos já existentes.
 			; pede a escolha ao utilizador
 
@@ -500,15 +514,35 @@ jogo proc
 			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
 			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
 
-			obtem_string	msgAskFich
+			obtem_string_nome_jogador msgAskPlayer
+			cmp jname[2],32
+			je erro_nome_jogador
+
+			obtem_string msgAskFich			; pede mapa para jogar
+			cmp	fname[2],32							;verifica se o nome do labirinto e = a espaço
+			jne	abre_labirinto_selecionado			; se nao for espaço carrega o labirinto por defeito
+
+			call apaga_ecran
+			call draw_instruct_jogo
+
+			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
+			call abre_labirinto_default			; carrega o labirinto def.txt - labirinto por defeito para o ecra
+			cmp al,1							; se houver erro vai para o fim e nao começa o jogo
+			je erro_abrir_labirinto
+
+			jmp inicio
+
+	abre_labirinto_selecionado:
 			call apaga_ecran
 			call draw_instruct_jogo
 
 			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
 			call abre_labirinto
-			cmp al,1
+			cmp al,1							; se houver erro vai para o fim e nao comeca o jogo
 			je erro_abrir_labirinto
 
+
+	inicio:
 			;verifica se o labirinto contem inicio em fim
 			call encontra_inicio
 			cmp	al,1
@@ -661,7 +695,8 @@ jogo proc
 
 	
 	erro_encontra_inicio:
-			;call apaga_ecran
+			call apaga_ecran
+
 			goto_xy 15,10
 			MOSTRA	msgErrorInicio
 
@@ -671,7 +706,9 @@ jogo proc
 			jmp fim
 
 	erro_encontra_fim:
-			;call apaga_ecran
+			call apaga_ecran
+
+			goto_xy 15,10
 			MOSTRA	msgErrorFim
 						
 			mov ah,0
@@ -680,15 +717,26 @@ jogo proc
 			jmp fim
 
 	erro_abrir_labirinto:
-			;call apaga_ecra
 			
 			mov ah,0
 			call LE_TECLA
 
 			jmp fim
 
+	erro_nome_jogador:
+			call apaga_ecran
+			
+			goto_xy 15,10
+			MOSTRA msgErrorName
+
+			mov	ah,0
+			call LE_TECLA
+
+			jmp restart
+
 	ganhou:
-			;call apaga_ecran
+			call apaga_ecran
+			
 			goto_xy	15,10
 			MOSTRA msgGanhou
 
@@ -950,10 +998,21 @@ edita_labirinto proc
 
 	CINCO:	
 			cmp 	al, 53			; Tecla 5
-			jne		GUARDA
+			jne		SEIS
 			mov		Car, 32			; espaço
 			jmp		CICLO	
 
+	SEIS:
+			cmp 	al,54			; Tecla 6
+			jne 	SEVEN
+			mov 	Car,73			; I
+			jmp		CICLO
+
+	SEVEN:
+			cmp 	al,55			; Tecla 7
+			jne		GUARDA
+			mov		Car,70			; F	
+			jmp 	CICLO
 
 	GUARDA:	
 			cmp		al,103
@@ -1071,6 +1130,11 @@ abre_labirinto proc
 		jmp		fim
 	
 	fim_erro_leitura:
+		call apaga_ecran
+
+		goto_xy 15,10
+		MOSTRA msgErrorRead
+		
 		mov     ah,3eh		; indica que vai fechar o ficheiro
 		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
 		int     21h			; fecha o ficheiro
@@ -1084,6 +1148,85 @@ abre_labirinto proc
 		ret
 
 abre_labirinto endp
+
+abre_labirinto_default proc
+		mov ah,3dh				 	; indica que vai abrir um ficheiro
+		mov al,0				 	; indica que o ficheiro sera aberto em modo de leitura
+		lea dx,default			 	; passa o nome do ficheiro para dentro de dx - este caso o default é def.txt
+		int 21h					 	; Chama a rotina de abertura de ficheiro (AX fica com Handle)
+		mov fhandle,ax				; passa handle do ficheiro que esta em AX para a variavel fhandle
+		jnc inicio					; se nao houver erro salta para inicio da funcao.
+
+		call apaga_ecran			;##################################################
+		goto_xy	20,10				;Apaga o ecrã e mostra mensagem de erro ao abrir
+		mov	ah,09h					;
+		lea	dx,msgErrorOpen			;
+		int 21h						;
+
+		mov al,1
+		jmp fim						;##################################################
+
+	inicio:
+		mov si,320				
+
+	ciclo:	
+		mov ah, 3fh			; diz que vai ler o ficheiro
+		mov bx, fhandle		; passa o handle do ficheiro para bx
+		mov cx, 2			; vai ler 2 byte de cada vez
+		lea dx, buffer		; DX fica a apontar para o caracter lido
+		int 21h				; le 2 caracteres do ficheiro
+		mov ax, buffer		; mete buffer em ax para voltar posicionalos no ecra
+		jc erro_leitura		; se houver erro vai mostrar o erro de leitura
+
+		mov 	es:[si],ax	; coloca conteudo de ax no ecra
+		add		si,2		; vai para a proxima posicao do ecra
+
+		cmp si,3840			; repete o codigo do ciclo até que a posicao do ecra seja 3840
+		jne ciclo
+		jmp fecha_ficheiro			
+
+	erro_leitura:
+		call apaga_ecran
+		goto_xy	20,10
+		mov	ah,09h
+		lea	dx,msgErrorRead
+		int 21h
+
+		xor ax,ax
+		mov al,1
+		push ax
+		
+		mov ah,0
+		call LE_TECLA
+
+		jmp fim_erro_leitura
+
+	fecha_ficheiro:
+		mov     ah,3eh		; indica que vai fechar o ficheiro
+		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
+		int     21h			; fecha o ficheiro
+
+		jmp		fim
+	
+	fim_erro_leitura:
+		call 	apaga_ecran
+
+		goto_xy 15,10
+		MOSTRA	msgErrorRead
+
+		mov     ah,3eh		; indica que vai fechar o ficheiro
+		mov     bx,fhandle	; passa o handle do ficheiro para dentro de bx
+		int     21h			; fecha o ficheiro
+
+		pop ax
+		jmp fim
+
+	fim_sucesso:
+		mov al,0
+	fim:
+		ret
+
+abre_labirinto_default endp
 
 ;########################################################################
 ;Procedure para mostrar top 10
