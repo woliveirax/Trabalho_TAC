@@ -56,16 +56,25 @@ dseg	segment para public 'data'
    				db ?
    				db 12 dup(0)
 
-		
 		default db 'def.txt',0
 		
-		msgErrorName	db	"Nome de jogador invalido!$",0
 		msgErrorOpen	db	"Ocorreu um erro na abertura do fichero!$",0
 		msgErrorCreate	db	"Ocorreu um erro na criacao do ficheiro!$",0
 		msgErrorWrite	db	"Ocorreu um erro na escrita para ficheiro!$",0
 		msgErrorClose	db	"Ocorreu um erro no fecho do ficheiro!$",0
 		msgErrorRead	db	"Ocorreu um erro no ao ler do ficheiro!$",0
+		
+		
+		;####################################################################################################################
+		;Variaveis altera mapa omissao
 
+		Warning			db	"			  | 1 - Comfirmar | 2 - Cancelar |",13,10
+						db	80 dup('-'),13,10
+						db	'$',0
+	
+		lista_labirintos	db  '		     Labirintos disponiveis		 ',13,10,10,10
+							db	'		    A.txt	B.txt	C.txt	D.txt	E.txt','$',0
+		
 		;####################################################################################################################
 		;Variaveis do jogo
 
@@ -78,7 +87,11 @@ dseg	segment para public 'data'
 
 		verificax	db 	0
 		verificay	db	0
-
+		
+		msgErrorFileName	db	'Nome do ficheiro invalido!$'
+		msgErrorName	db	'Nome de jogador invalido!$'
+		msgInfoErroOpen db	'Sera aberto o labirinto por defeito!$'
+		msgInfo			db 	'Precione ENTER para carregar o mapa por defeito!$'
 		msgErrorInicio 	db	'Nao existe um inicio no labirinto selecionado!$'
 		msgErrorFim		db	'Nao existe um fim no labirinto selecionado!$'
 		msgErrorOpenMap	db	'Nao foi possivel abrir o labirinto!$'
@@ -337,12 +350,35 @@ Trata_Horas ENDP
 ;########################################################################
 ;Pede string ao utilizador
 
+obtem_string_jogo macro str
+	;call apaga_ecran
+	
+	goto_xy 15,8
+	MOSTRA	msgInfo
+
+	goto_xy	24,10
+	MOSTRA str
+
+	goto_xy	34,11
+
+	mov ah, 0Ah
+	mov dx,offset fname
+	int 21h
+	
+	mov si, offset fname + 1 	;NUMBER OF CHARACTERS ENTERED.
+	mov cl, [si] 				;MOVE LENGTH TO CL.
+	mov ch, 0      				;CLEAR CH TO USE CX. 
+	inc cx 						;TO REACH CHR(6).
+	add si, cx 					;NOW SI POINTS TO CHR(12).
+	mov al, ' '
+	mov [si], al 				;REPLACE CHR(12) BY '$'.            
+
+endm
+
 obtem_string macro str
 	call apaga_ecran
 	goto_xy	24,10
-	mov ah,09h
-	lea dx,str
-	int 21h
+	MOSTRA	str
 	goto_xy	34,11
 
 	mov ah, 0Ah
@@ -382,12 +418,14 @@ obtem_string_nome_jogador macro str
 endm
 
 ;########################################################################
-;Procedure do jogo normal!
-
+;								JOGO
+;########################################################################
 ; Inicia jogo
 ; Mostra instrucoes
 ; encontra ponto de inicio e posiciona cursor
 
+
+;obtem caractere da posicao do cursor
 obtem_car_ecra proc
 	mov ah,08h
 	mov bh,0
@@ -396,6 +434,7 @@ obtem_car_ecra proc
 	ret
 obtem_car_ecra endp
 
+;Verifica se o mapa carregado para o ecra possui inicio
 encontra_inicio proc
 
 		mov verificax,20
@@ -440,6 +479,7 @@ encontra_inicio proc
 		ret
 encontra_inicio endp
 
+;Verifica se o mapa carregado para o ecra possui fim
 encontra_fim proc
 
 		mov verificax,20
@@ -487,6 +527,7 @@ draw_instruct_jogo proc
 	ret
 draw_instruct_jogo endp
 
+;obtem a proxima posicao do cursor 
 get_nextPos proc
 	goto_xy POSx,POSy
 
@@ -497,6 +538,15 @@ get_nextPos proc
 	ret
 get_nextPos endp
 
+;mostra mapas que vem de origem com o jogo
+mostra_mapas proc
+	goto_xy 15,2
+
+	MOSTRA lista_labirintos
+
+	ret
+mostra_mapas endp
+
 jogo proc
 
 	restart:
@@ -504,12 +554,6 @@ jogo proc
 			mov Game_Time_h,0
 			mov Game_Time_m,0
 			mov Game_Time_s,0
-
-			; mostra menu com uma lista de X labirintos já existentes.
-			; pede a escolha ao utilizador
-
-			; verifica se o labirinto obtino na string existe, se existir:
-			; vai carregar o que o utilizador utilizou, se nao utiliza o labirinto por omissao.
 			
 			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
 			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
@@ -518,14 +562,18 @@ jogo proc
 			cmp jname[2],32
 			je erro_nome_jogador
 
-			obtem_string msgAskFich			; pede mapa para jogar
-			cmp	fname[2],32							;verifica se o nome do labirinto e = a espaço
+			call apaga_ecran
+			call mostra_mapas
+			
+			obtem_string_jogo msgAskFich			; pede labirinto para jogar
+			cmp	fname[2],32							; verifica se o nome do labirinto = a espaço
 			jne	abre_labirinto_selecionado			; se nao for espaço carrega o labirinto por defeito
 
+	labirinto_default:
 			call apaga_ecran
 			call draw_instruct_jogo
 
-			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
+			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra			
 			call abre_labirinto_default			; carrega o labirinto def.txt - labirinto por defeito para o ecra
 			cmp al,1							; se houver erro vai para o fim e nao começa o jogo
 			je erro_abrir_labirinto
@@ -638,6 +686,7 @@ jogo proc
 
 			cmp al,32
 			jne movimento
+
 			jmp	CICLO
 
 	BAIXO:	cmp	al,50h			; Baixo
@@ -717,11 +766,14 @@ jogo proc
 			jmp fim
 
 	erro_abrir_labirinto:
+
+			goto_xy 21,12
+			MOSTRA msgInfoErroOpen
 			
 			mov ah,0
 			call LE_TECLA
 
-			jmp fim
+			jmp labirinto_default
 
 	erro_nome_jogador:
 			call apaga_ecran
@@ -735,13 +787,16 @@ jogo proc
 			jmp restart
 
 	ganhou:
+			; ALTERAR A MENSAGEM
+			; adicionar tempo e nome do jogador no fim :)
 			call apaga_ecran
 			
-			goto_xy	15,10
+			goto_xy	37,10
 			MOSTRA msgGanhou
 
 			goto_xy 15,11
 			;MOSTRA tempoFim
+			;MOSTRA nome do jogador
 			
 			mov	ah,0
 			call LE_TECLA
@@ -749,6 +804,373 @@ jogo proc
 		ret
 
 jogo endp
+
+;########################################################################
+;Procedure para alterar o labirinto por omissao
+
+jogo proc
+
+	restart:
+			; Reinicia o contador do jogo
+			mov Game_Time_h,0
+			mov Game_Time_m,0
+			mov Game_Time_s,0
+			
+			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
+			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
+
+			obtem_string_nome_jogador msgAskPlayer
+			cmp jname[2],32
+			je erro_nome_jogador
+
+			call apaga_ecran
+			call mostra_mapas
+			
+			obtem_string_jogo msgAskFich			; pede labirinto para jogar
+			cmp	fname[2],32							; verifica se o nome do labirinto = a espaço
+			jne	abre_labirinto_selecionado			; se nao for espaço carrega o labirinto por defeito
+
+	labirinto_default:
+			call apaga_ecran
+			call draw_instruct_jogo
+
+			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra			
+			call abre_labirinto_default			; carrega o labirinto def.txt - labirinto por defeito para o ecra
+			cmp al,1							; se houver erro vai para o fim e nao começa o jogo
+			je erro_abrir_labirinto
+
+			jmp inicio
+
+	abre_labirinto_selecionado:
+			call apaga_ecran
+			call draw_instruct_jogo
+
+			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
+			call abre_labirinto
+			cmp al,1							; se houver erro vai para o fim e nao comeca o jogo
+			je erro_abrir_labirinto
+
+
+	inicio:
+			;verifica se o labirinto contem inicio em fim
+			call encontra_inicio
+			cmp	al,1
+			je	erro_encontra_inicio
+
+			call encontra_fim
+			cmp al,1
+			je	erro_encontra_fim
+			
+			;Inicializa posicoes anteriores ( pois no inicio do jogo nao existem posicoes anteriores )
+			mov al,POSx
+			mov POSxa,al
+
+			mov al,POSy
+			mov POSya,al
+
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
+			mov	bh, 0			; numero da p�gina
+			int	10h
+			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+			
+	CICLO:
+			
+			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+			mov	ah, 02h
+			mov	dl, Car			; Repoe Caracter guardado
+			int	21h
+
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov ah, 08h
+			mov	bh,0			; numero da p�gina
+			int	10h
+			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+		    
+			goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
+			mov	ah, 02h			; IMPRIME caracter da posi��o no canto
+			mov	dl, Car
+			int	21H
+
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+			
+			cmp Car,' '
+			jne movimento
+			jmp IMPRIME
+
+	movimento:
+			goto_xy	POSxa,POSya
+
+			mov al,POSxa
+			mov POSx,al
+			mov al, POSya
+			mov POSy,al
+			
+			jmp imprime
+
+	IMPRIME:	
+			mov	ah, 02h
+			mov	dl, 190			; Coloca AVATAR
+			int	21H
+			
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+
+			mov	al, POSx		; Guarda a posi��o do cursor
+			mov	POSxa, al
+			mov	al, POSy		; Guarda a posi��o do cursor
+			mov POSya, al
+
+	LER_SETA:
+			mov ah,1
+			call LE_TECLA
+
+			cmp	ah, 1
+			je	ESTEND
+
+			cmp AL, 27			; ESCAPE
+			je	FIM
+
+			jmp	LER_SETA
+
+	ESTEND:	
+			cmp al,48h			; Cima
+			jne	BAIXO
+
+			cmp POSy,3
+			je	LER_SETA
+
+			dec	POSy
+			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
+			cmp al,32
+			jne movimento
+
+			jmp	CICLO
+
+	BAIXO:	cmp	al,50h			; Baixo
+			jne	ESQUERDA
+
+			cmp POSy,22
+			je	LER_SETA
+
+			inc POSy
+			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
+			cmp al,32
+			jne movimento
+
+			jmp	CICLO
+
+	ESQUERDA:
+			cmp	al,4Bh			; Esquerda
+			jne	DIREITA
+
+			cmp POSx,20
+			je LER_SETA
+			
+			dec	POSx
+			call get_nextPos
+
+			cmp	al,70
+			je	ganhou
+
+			cmp al,32
+			jne movimento
+
+			jmp	CICLO
+
+	DIREITA:
+			cmp	al,4Dh			; Direita
+			jne	LER_SETA
+
+			cmp POSx,59
+			je	LER_SETA
+
+			inc POSx
+			call get_nextPos
+			
+			cmp	al,70
+			je	ganhou
+
+			cmp al,32
+			jne movimento
+
+			jmp	CICLO
+
+	
+	erro_encontra_inicio:
+			call apaga_ecran
+
+			goto_xy 15,10
+			MOSTRA	msgErrorInicio
+
+			mov	ah,0
+			call LE_TECLA
+			
+			jmp fim
+
+	erro_encontra_fim:
+			call apaga_ecran
+
+			goto_xy 15,10
+			MOSTRA	msgErrorFim
+						
+			mov ah,0
+			call LE_TECLA
+
+			jmp fim
+
+	erro_abrir_labirinto:
+
+			goto_xy 21,12
+			MOSTRA msgInfoErroOpen
+			
+			mov ah,0
+			call LE_TECLA
+
+			jmp labirinto_default
+
+	erro_nome_jogador:
+			call apaga_ecran
+			
+			goto_xy 15,10
+			MOSTRA msgErrorName
+
+			mov	ah,0
+			call LE_TECLA
+
+			jmp restart
+
+	ganhou:
+			; ALTERAR A MENSAGEM
+			; adicionar tempo e nome do jogador no fim :)
+			call apaga_ecran
+			
+			goto_xy	37,10
+			MOSTRA msgGanhou
+
+			goto_xy 15,11
+			;MOSTRA tempoFim
+			;MOSTRA nome do jogador
+			
+			mov	ah,0
+			call LE_TECLA
+	fim:
+		ret
+
+jogo endp
+
+;########################################################################
+;Procedure para alterar o labirinto por omissao
+
+guarda_labirinto_default proc
+		
+		mov	ax,0B800h ;0B800h -> endereço para memoria de video 
+		mov	es,ax	  ;colocado em es -> aponta para um sitio menos cs ds ss
+		
+		mov	ah, 3ch						; abrir ficheiro para escrita 
+		mov	cx, 00H						; tipo de ficheiro
+		lea	dx, default					; dx contem endereco do nome do ficheiro 
+		int	21h	
+		mov fhandle,ax					; abre efectivamente e AX vai ficar com o Handle do ficheiro
+		jnc inicio
+
+		call apaga_ecran
+		goto_xy	20,10
+		mov	ah,09h
+		lea	dx,msgErrorOpen
+		int 21h
+
+		mov ah,0
+		call LE_TECLA
+		
+		jmp fim
+
+	inicio:
+		mov si,320
+
+	ciclo:
+		mov ax,es:[si]
+		add si,2
+		
+		mov buffer,ax
+		mov	bx, fhandle		; para escrever BX deve conter o Handle 
+		mov	ah, 40h			; indica que vamos escrever 
+		lea	dx, buffer		;ax ->al Vamos escrever o que estiver no endereço DX
+		mov	cx, 2			;2 vamos escrever multiplos bytes duma vez só
+		int	21h				; faz a escrita 		
+		jc	erro_escrita
+
+		cmp si,3840
+		jne ciclo
+		jmp fechar
+	
+	erro_escrita:
+		call apaga_ecran
+		goto_xy	20,10
+		mov	ah,09h
+		lea dx,msgErrorWrite
+		int 21h
+		
+		mov ah,0
+		call LE_TECLA
+
+	fechar:
+		mov	ah,3eh			; indica que vamos fechar
+		mov bx,fhandle		; passa o handle do ficheiro para bx
+		int	21h				; fecha mesmo
+							; se não acontecer erro termina
+	fim:
+		;call apaga_ecran
+		ret
+guarda_labirinto_default endp
+
+altera_labirinto_default proc
+
+			obtem_string msgAskFich
+			call apaga_ecran
+			
+			call abre_labirinto
+			cmp	al,1
+			je	erro_abrir
+	
+			goto_xy 0,0
+			MOSTRA Warning
+
+	CICLO:
+			mov	ah,0
+			call LE_TECLA
+			
+			cmp al, 27			; ESCAPE
+			je	fim
+
+	SIM:
+			cmp al,49
+			jne NAO
+			call guarda_labirinto_default
+			jmp fim
+
+	NAO:
+			cmp al,50
+			jne	NOVE
+			jmp fim
+
+	NOVE:
+			jmp	CICLO
+	
+	erro_abrir:
+			mov	ah,0
+			call LE_TECLA
+			
+	fim:
+			ret
+altera_labirinto_default endp
 
 ;########################################################################
 ;Procedure para criar labirinto!
@@ -825,8 +1247,12 @@ draw_instruct	proc
 draw_instruct	endp
 
 cria_labirinto proc
+	
+	restart:
 			obtem_string msgAskNovoFich
-			
+			cmp	fname[2],' '
+			je	erro_nome
+
 			call	apaga_ecran
 			call 	draw_instruct
 			
@@ -940,6 +1366,18 @@ cria_labirinto proc
 			inc		POSx			;Direita
 			jmp		CICLO
 
+	erro_nome:
+			call apaga_ecran
+
+			goto_xy 27,10
+			
+			MOSTRA	msgErrorFileName
+
+			mov ah,0
+			call LE_TECLA
+
+			jmp restart
+
 	fim:
 			ret
 cria_labirinto endp
@@ -948,10 +1386,14 @@ cria_labirinto endp
 ;Procedure para mostrar labirinto!
 
 edita_labirinto proc
-			obtem_string msgAskFich
 
-			call	apaga_ecran
-			call 	abre_labirinto
+			obtem_string msgAskFich
+			call apaga_ecran
+			
+			call abre_labirinto
+			cmp	al,1
+			je	erro_abrir
+			
 			call 	draw_instruct
 			
 			mov	POSx,20
@@ -966,6 +1408,7 @@ edita_labirinto proc
 			int		21H
 			goto_xy	POSx,POSy
 			
+			mov		ah,0
 			call 	LE_TECLA
 
 			cmp		ah, 1
@@ -1062,6 +1505,10 @@ edita_labirinto proc
 
 			inc		POSx			;Direita
 			jmp		CICLO
+	
+	erro_abrir:
+			mov	ah,0
+			call LE_TECLA
 
 	fim:
 			ret
@@ -1229,26 +1676,10 @@ abre_labirinto_default proc
 abre_labirinto_default endp
 
 ;########################################################################
-;Procedure para mostrar top 10
-
-top10 proc
-	mov ah,09h
-	lea dx,top10_placeholder
-	int 21h
-
-	ret
-top10 endp
-
+;					 			   TOP 10
 ;########################################################################
-;Procedure para alterar TOP 10
 
-altera_top10 proc
-	mov ah,09h
-	lea dx,change_top10_placeholder
-	int 21h
 
-	ret
-altera_top10 endp
 
 ;########################################################################
 ;									Menus
@@ -1286,7 +1717,7 @@ display_options_menu proc
 			jmp menu_loop
 
 	carrega_lab:
-			;all carrega_lab_omissao
+			call altera_labirinto_default
 			jmp menu_loop
 
 	cria_lab:
