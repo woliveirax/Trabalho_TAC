@@ -36,7 +36,6 @@ dseg	segment para public 'data'
 		car		db	?
 		cria_lab_instrucoes	db	' 1 - ',219,' 2 - ',178,' 3 - ',177,' 4 - ',176,' 5 - apaga  6 - Inicio  7 - fim  g - Guarda  ESC - Sair',13,10
 							db	80 dup('-'),'$',0
-		contador			db	?
 
 		;Variaveis para gestão do ficheiro de labirinto
 		fhandle			dw	0
@@ -97,6 +96,27 @@ dseg	segment para public 'data'
 		msgErrorOpenMap	db	'Nao foi possivel abrir o labirinto!$'
 		msgGanhou		db	'Ganhou!$'
 		
+
+		;####################################################################################################################
+		;Variaveis do EXTRA
+
+		 POSx_Saved	db	0
+		 POSy_Saved	db	0
+
+		 ; The compass can vary from 4 values
+		 ; 0 - NORTH
+		 ; 1 - SOUTH
+		 ; 2 - WEST
+		 ; 3 - EAST
+		 compass db 0
+		 
+		 ; The position variables can vary from 0's and 1's meaning there is a wall if it's at 1
+		 ; These will be updated at every step along with the orientation
+		 straight	db	0
+		 back	db	0
+		 left	db 	0
+		 right	db 	0
+
 		;####################################################################################################################
 		;Variaveis do temporizador
 
@@ -115,14 +135,90 @@ dseg	segment para public 'data'
 		Game_Time_h		dw		0								; horas
 
 		;####################################################################################################################
+		;Variaveis do TOP 10
 
-		;Placeholder variables
-		cria_lab_placeholder	db	'A criar labirinto! $',0
-		abre_lab_placeholder	db	'A abrir labirinto! $',0
-		change_top10_placeholder	db	'A alterar top 10! $',0
-		top10_placeholder		db	'A mostrar top 10! $',0
-		game_placeholder		db	'Inicio de jogo! $',0
-		game_cheats_placeholder	db	'Inicio de jogo com ajuda do computador! $',0
+;*********************************************************************************
+;  						Variaveis para Top 10   
+;*********************************************************************************
+
+		Top10_Classificacao		db  80 dup('_'),13,10
+								db   '                              TOP 10 - Classificacao                      ',13,10
+								db   80 dup('_'),13,10	     
+								db   ' Tempo   Nome                    ',13,10
+								db   "______________",13,10
+								
+		Top10_jogadores			db	 "   m  s  ","          ",13,10
+								db	 " 00m45s  ","joao      ",13,10
+								db   " 00m50s  ","Francis   ",13,10
+								db   " 01m05s  ","Cristina  ",13,10
+								db   " 01m10s  ","Maria     ",13,10
+								db   " 01m15s  ","Joana     ",13,10
+								db   " 01m25s  ","Margarida ",13,10
+								db   " 01m30s  ","Jose      ",13,10
+								db   " 01m35s  ","Toino     ",13,10
+								db   "   m  s  ","          ",13,10
+								db  '$',0
+
+;********************************************************************************		
+; Variaveis para escrever no ficheiro
+;********************************************************************************
+
+		Top10_File				db	'Top10.TXT',0
+		msgErrorCreate_File		db	"Ocorreu um erro na criacao do ficheiro!$"
+		msgErrorWrite_File		db	"Ocorreu um erro na escrita para ficheiro!$"
+		msgErrorClose_File		db	"Ocorreu um erro no fecho do ficheiro!$"
+
+;********************************************************************************
+; 						variaveis para Ler ficheiro TOP 10
+;********************************************************************************
+		
+		Erro_Open				db	'Erro ao tentar abrir o ficheiro$'
+		Erro_Ler_Msg			db	'Erro ao tentar ler do ficheiro$'
+		Erro_Close				db	'Erro ao tentar fechar o ficheiro$'	
+		HandleFile_Read			dw	0
+		caracter_TOP10			db	?
+		contador				dw	1
+		linha					db	0
+		line					db	0
+		line2					db	0
+		total_bytes				db	21
+		m1						db	11
+		m2						db  12
+		s1						db 	14 
+		s2                      db 	15
+		pos1					db	?
+		pos2					db  ?
+		pos3     				db  ?
+		pos4 					db  ?
+		classificacao_top10   	db  ?
+		nome_top10				db 	10 dup(?)
+		tempo_top10				db 	8  dup(?) 	
+		
+
+;*********************************************************************************
+; 						variaveis para gravar jogador
+;*********************************************************************************	
+		
+		nome_jogador			db 12
+								db ?
+								db "          "
+		nome_com_sifrao			db "         "
+		
+;*********************************************************************************
+;				Variavel onde grava string que pede nome do jogador
+;*********************************************************************************
+		
+		pedir_jogador 			db	"Indique o nome do jogador $",0
+
+
+;*********************************************************************************
+;				Variaveis para guardar tempo em bytes
+;*********************************************************************************
+		
+		horasb				db  2 dup(0)
+		minutosb			db  2 dup(0)
+		segundosb			db  2 dup(0)
+		
 
 dseg	ends
 
@@ -625,11 +721,6 @@ jogo proc
 			mov	bh,0			; numero da p�gina
 			int	10h
 			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
-		    
-			goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
-			mov	ah, 02h			; IMPRIME caracter da posi��o no canto
-			mov	dl, Car
-			int	21H
 
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 			
@@ -806,25 +897,100 @@ jogo proc
 jogo endp
 
 ;########################################################################
-;Procedure para alterar o labirinto por omissao
+;Procedure para encontrar fim do labirinto
 
-jogo proc
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
+; 										Algorithm											 ;
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
+;																							 ;
+; 1 - O avatar ira mover-se para a direita sempre que possivel								 ;
+; 2 - Se o caminho para direita estiver bloqueado, devera seguir em frente					 ;
+; 3 - Se o caminho da direita e em frente estiverem bloqueados devera ir para a esquerda	 ;
+; 4 - Se todos os caminhos estiverem bloqueados, o avatar devera voltar para tras.			 ;
+;																							 ;
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
 
-	restart:
-			; Reinicia o contador do jogo
-			mov Game_Time_h,0
-			mov Game_Time_m,0
-			mov Game_Time_s,0
+
+init_pos proc
+
+	mov straight,0
+	mov	back,0
+	mov left,0
+	mov right,0
+
+	ret
+init_pos endp
+
+obtem_surroundings proc
+
+		call init_pos
+
+		dec POSy
+		goto_xy POSx,POSy
+
+		mov ah,08h
+		mov bh,0
+		int 10h
+		
+		cmp al,32
+		jne voltar_atras
+		mov straight,1
+
+		inc POSy
+
+	voltar_atras:
+		
+		inc POSy
+		goto_xy POSx,POSy
+
+		mov ah,08h
+		mov bh,0
+		int 10h
+		
+		cmp al,32
+		jne esquerda
+		mov back,1
+
+		dec POSy
+
+	esquerda:
+
+		dec POSx
+		goto_xy POSx,POSy
+
+		mov ah,08h
+		mov bh,0
+		int 10h
+		
+		cmp al,32
+		jne direita
+		mov left,1
+
+		inc POSx
+
+	direita:
+
+		inc POSx
+		goto_xy POSx,POSy
+
+		mov ah,08h
+		mov bh,0
+		int 10h
+		
+		cmp al,32
+		jne fim
+		mov right,1
+
+		dec POSx
+
+	fim:
+		ret
+obtem_surroundings endp
+
+jogo_extra proc
 			
-			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
-			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
-
-			obtem_string_nome_jogador msgAskPlayer
-			cmp jname[2],32
-			je erro_nome_jogador
-
 			call apaga_ecran
-			call mostra_mapas
+			call mostra_mapas						; mostra escolha possiveis que vem com o jogo
 			
 			obtem_string_jogo msgAskFich			; pede labirinto para jogar
 			cmp	fname[2],32							; verifica se o nome do labirinto = a espaço
@@ -832,7 +998,6 @@ jogo proc
 
 	labirinto_default:
 			call apaga_ecran
-			call draw_instruct_jogo
 
 			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra			
 			call abre_labirinto_default			; carrega o labirinto def.txt - labirinto por defeito para o ecra
@@ -843,7 +1008,6 @@ jogo proc
 
 	abre_labirinto_selecionado:
 			call apaga_ecran
-			call draw_instruct_jogo
 
 			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
 			call abre_labirinto
@@ -886,11 +1050,6 @@ jogo proc
 			mov	bh,0			; numero da p�gina
 			int	10h
 			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
-		    
-			goto_xy	78,0		; Mostra o caractr que estava na posi��o do AVATAR
-			mov	ah, 02h			; IMPRIME caracter da posi��o no canto
-			mov	dl, Car
-			int	21H
 
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 			
@@ -920,24 +1079,12 @@ jogo proc
 			mov	al, POSy		; Guarda a posi��o do cursor
 			mov POSya, al
 
-	LER_SETA:
-			mov ah,1
-			call LE_TECLA
-
-			cmp	ah, 1
-			je	ESTEND
-
-			cmp AL, 27			; ESCAPE
-			je	FIM
-
-			jmp	LER_SETA
-
-	ESTEND:	
+	CIMA:	
 			cmp al,48h			; Cima
 			jne	BAIXO
 
 			cmp POSy,3
-			je	LER_SETA
+			;je	LER_SETA
 
 			dec	POSy
 			call get_nextPos
@@ -954,7 +1101,7 @@ jogo proc
 			jne	ESQUERDA
 
 			cmp POSy,22
-			je	LER_SETA
+			;je	LER_SETA
 
 			inc POSy
 			call get_nextPos
@@ -972,7 +1119,7 @@ jogo proc
 			jne	DIREITA
 
 			cmp POSx,20
-			je LER_SETA
+			;je LER_SETA
 			
 			dec	POSx
 			call get_nextPos
@@ -987,10 +1134,10 @@ jogo proc
 
 	DIREITA:
 			cmp	al,4Dh			; Direita
-			jne	LER_SETA
+			;jne	LER_SETA
 
 			cmp POSx,59
-			je	LER_SETA
+			;je	LER_SETA
 
 			inc POSx
 			call get_nextPos
@@ -1036,35 +1183,14 @@ jogo proc
 
 			jmp labirinto_default
 
-	erro_nome_jogador:
-			call apaga_ecran
-			
-			goto_xy 15,10
-			MOSTRA msgErrorName
-
-			mov	ah,0
-			call LE_TECLA
-
-			jmp restart
-
 	ganhou:
-			; ALTERAR A MENSAGEM
-			; adicionar tempo e nome do jogador no fim :)
-			call apaga_ecran
-			
-			goto_xy	37,10
-			MOSTRA msgGanhou
-
-			goto_xy 15,11
-			;MOSTRA tempoFim
-			;MOSTRA nome do jogador
 			
 			mov	ah,0
 			call LE_TECLA
 	fim:
 		ret
 
-jogo endp
+jogo_extra endp
 
 ;########################################################################
 ;Procedure para alterar o labirinto por omissao
@@ -1678,8 +1804,414 @@ abre_labirinto_default endp
 ;########################################################################
 ;					 			   TOP 10
 ;########################################################################
+display_TOP10 proc
 
+		;apaga ecra e posiciona o cursor no inicio.
+		call apaga_ecran
+		goto_xy 0,0
 
+		;mostra menu
+		mov  ah,09h
+		lea  dx,Top10_Classificacao
+		int  21h
+		
+		;Pede input ao utilizador.
+		goto_xy	21,19
+
+	FIM:
+
+		ret
+	
+display_TOP10 endp
+
+; #####################################################################
+; Trata nome para  poder ser imprimido corretamente
+; isto acontece devido ao obtem_nome nao guardar carater $ para se poder
+; imprimir no vetor
+; foi necessario fazer esta alteraçao para imprimir o nome no ecran
+; sem os carateres estranhos por cima das horas
+; #####################################################################
+        				
+trata_nome_com_sifrao PROC
+
+		push ax
+		push bx
+		push si
+		push di
+		
+		mov si, 2
+		mov di, 0
+		
+	ciclo_trata_nome:
+
+		mov al, nome_jogador[si]
+		cmp al,' '
+		je fim_trata_nome
+		mov nome_com_sifrao[di],al
+		inc si
+		inc di
+		cmp si,10
+		jne ciclo_trata_nome
+		
+	fim_trata_nome:
+
+		mov nome_com_sifrao[di+1], '$'
+
+		pop di
+		pop si
+		pop bx
+		pop ax
+		ret
+trata_nome_com_sifrao ENDP
+
+obtem_string_nome_jogador macro str
+
+	call apaga_ecran
+	goto_xy	24,10
+	mov ah,09h
+	lea dx,str
+	int 21h
+	goto_xy	34,11
+
+	mov ah, 0Ah
+	mov dx,offset nome_jogador			; onde fica guardado o nome do jogador
+	int 21h
+
+										;CHANGE CHR(12) BY '$'.
+	mov si, offset nome_jogador+1 	;NUMBER OF CHARACTERS ENTERED.
+	mov cl, [si] 						;MOVE LENGTH TO CL.
+	mov ch, 0      						;CLEAR CH TO USE CX. 
+	inc cx 								;TO REACH CHR(6).
+	add si, cx 							;NOW SI POINTS TO CHR(12).
+	mov al, ' '
+	mov [si], al 						;REPLACE CHR(12) BY '$'.            
+	call trata_nome_com_sifrao
+endm
+
+Escreve_dados_Ficheiro_Top10 PROC
+
+		mov	ah, 3ch						; abrir ficheiro para escrita 
+		mov	cx, 00H						; tipo de ficheiro
+		lea	dx, Top10_File				; dx contem endereco do nome do ficheiro 
+		int	21h							; abre efectivamente e AX vai ficar com o Handle do ficheiro 
+		jnc	escreve						; se não acontecer erro vai vamos escrever
+		
+		mov	ah, 09h						; Aconteceu erro na leitura
+		lea	dx, msgErrorCreate_File	
+		int	21h
+		
+		jmp	fim
+
+	escreve:
+
+		mov	bx, ax						; para escrever BX deve conter o Handle 
+		mov	ah, 40h						; indica que vamos escrever 
+			
+		lea	dx, Top10_jogadores			; Vamos escrever o que estiver no endereço DX
+		mov	cx, 190						; vamos escrever multiplos bytes duma vez só
+		int	21h							; faz a escrita 
+		jnc	close						; se não acontecer erro fecha o ficheiro 
+		
+		mov	ah, 09h
+		lea	dx, msgErrorWrite_File
+		int	21h
+		
+	close:
+
+		mov	ah,3eh						; indica que vamos fechar
+		int	21h							; fecha mesmo
+		jnc	fim							; se não acontecer erro termina
+		
+		mov	ah, 09h
+		lea	dx, msgErrorClose_File
+		int	21h
+		
+	fim:
+		ret 
+		
+Escreve_dados_Ficheiro_Top10 ENDP
+
+;****************************************************************************************
+;              					  LÊ do ficheiro
+;****************************************************************************************
+	
+copia_linha_top10_para_vetor proc
+	
+	push ax
+	
+	mov al, classificacao_top10               	   	;                   	
+	mov Top10_jogadores[0], al					  	;
+													;
+	mov al, nome_top10								;
+	mov Top10_jogadores[1], al						; preenche as respetivas linhas com os dados de cada classificaçao
+													;
+	mov al, tempo_top10								;
+	mov Top10_jogadores[2], al						;
+	
+	pop ax
+	
+copia_linha_top10_para_vetor endp		
+		
+Ler_Dados_Ficheiro_Top10 PROC
+	
+		push ax
+		push bx
+		push cx
+		push dx
+		
+													; ;abre ficheiro
+		mov     ah,3dh
+		mov     al,0
+		lea     dx,Top10_File
+		int     21h									; Chama a rotina de abertura de ficheiro (AX fica com Handle)
+		jc      erro_abrir
+		mov     HandleFile_Read,ax						; para onde aponta o ponteiro na memoria;
+		
+	inicio:
+	
+		xor	    si,si								; inicio da leitura do ficheiro vai chamar o ciclo1
+		jmp		ler_ciclo1
+		
+	resete_contador:								
+		
+		mov     contador,1							; reseta contador para iniciar a leitura no inicio da nova linha
+		inc 	linha	
+		jmp		ler_ciclo1
+				
+	ler_nome:
+	
+		mov			cx, 10							;; vai ler 10 bytes de cada vez, ara preencher o nome
+		lea 		dx, nome_top10
+		mov 		contador,2
+		jmp 		ler_ciclo2
+		
+	read_tempo:
+	
+		mov 		cx, 9							;; vai ler 8 bytes de cada vez para preencher a hora
+		lea			dx, tempo_top10
+		jmp 		ler_ciclo2
+		
+		
+	ler_ciclo1:									; contador vai servir para defenir o numero de bits que se vai ler do ficheiro de cada vez;
+			
+		cmp			contador, 2				; se contador for igual a 1 vai para ler nome
+		je			ler_nome
+		
+		cmp 		contador, 1				; se contador for igual a 2 vai para ler tempo
+		je  		read_tempo
+		
+	ler_ciclo2:
+	
+		mov     	ah, 3fh							; ficheiro aberto para leitura
+		mov     	bx, HandleFile_Read
+		
+		int     	21h								; mostra erro se nao conseguir abrir o ficheiro
+		jc	    	erro_ler
+		
+		cmp		    ax, 0							; verifica se já chegou o fim de ficheiro EOF? 
+		je			fecha_ficheiro					; se chegou ao fim do ficheiro fecha e sai
+					
+		cmp			caracter_TOP10, 13				; verifica se já chegou ao fim da linha do ficheiro, 
+		je			resete_contador					; se chegou ao fim  
+	
+		cmp 		linha, 10
+		je  		Fim	
+		jmp			ler_ciclo1						; vai ler o próximo caracter
+		
+	erro_abrir:										
+	
+		mov    	ah,09h
+		lea     dx,Erro_Open
+		int     21h
+		jmp     Fim
+
+	erro_ler:
+	
+		mov     ah,09h
+		lea     dx,Erro_Ler_Msg
+		int     21h
+		   
+	fecha_ficheiro:
+	
+		mov     ah,3eh
+		mov     bx,HandleFile_Read
+		int     21h
+		jnc 	fim
+
+		mov     ah,09h
+		lea     dx,Erro_Close
+		Int     21h
+		jmp 	Fim
+		
+	Fim:
+		
+		pop dx
+		pop cx
+		pop bx
+		pop ax
+		
+		ret
+			
+Ler_Dados_Ficheiro_Top10 ENDP
+
+;****************************************************************************************
+;              			VAi inserir tempo no top 10
+;****************************************************************************************
+
+top10_incrementa_novo_jogador proc
+	
+		push ax
+		push bx
+		push di
+		push si
+		
+		mov line, 0
+	;******************************************************
+	; verifica espaços vazios
+	;******************************************************
+	espacos_vazios:
+
+		cmp line, 10
+		je fim_preenche
+		mov bl, line
+		mov al, total_bytes
+		mul bl
+		mov si, ax
+		inc si
+		cmp Top10_jogadores[si], ' '
+		je preenche_novo_jogador
+	;******************************************************
+	; se nao encontra espaços vazios vai substituir jogador
+	;******************************************************
+	substitui_jogador:
+			
+		mov bl, minutosb[0]
+		cmp bl, Top10_jogadores[si]
+		je proximo1
+		jb escreve1
+		ja inc_linha_substitui
+		inc si
+	;******************************************************
+	; vai procurar nas casas dos segundos se o tempo do 
+	;novo jogadoré menor que os que existem no top10
+	;******************************************************		
+	proximo1:
+
+		inc si
+		mov bl, minutosb[1]
+		cmp bl, Top10_jogadores[si]
+		je proximo2
+		jb escreve1
+		ja inc_linha_substitui
+		
+	proximo2:
+		
+		add si,2
+		mov bl, segundosb[0]
+		cmp bl, Top10_jogadores[si]
+		je proximo3
+		jb escreve1
+		ja inc_linha_substitui
+		
+	proximo3:
+		
+		inc si
+		mov bl, segundosb[1]
+		cmp bl, Top10_jogadores[si]
+		jb  escreve1
+		ja	inc_linha_substitui
+		add si, 4
+		mov di,2
+	;******************************************************
+	; vai escrever o jogador novo, se ultrapassar
+	; os records atuais
+	;******************************************************
+	escreve1:
+		
+		mov bl, line
+		mov al,total_bytes
+		mul bl
+		mov si, ax
+		inc si
+		mov bl, Top10_jogadores[si]
+		mov dl, minutosb[0]
+		mov Top10_jogadores[si],dl
+		mov minutosb[0],bl
+		inc si
+		mov bl, Top10_jogadores[si]
+		mov dl, minutosb[1]
+		mov Top10_jogadores[si],dl
+		mov minutosb[0],bl
+		add si,2
+		mov bl, Top10_jogadores[si]
+		mov dl, segundosb[0]
+		mov Top10_jogadores[si],dl
+		mov segundosb[0],bl
+		inc si
+		mov bl, Top10_jogadores[si]
+		mov dl, segundosb[1]
+		mov Top10_jogadores[si],dl
+		mov segundosb[1],bl
+		add si, 4
+		mov di,2
+
+	ciclo3:
+		
+		mov al,Top10_jogadores[si]
+		mov dl, nome_jogador[di]
+		mov Top10_jogadores[si],dl
+		mov nome_jogador[di],al
+		inc di
+		inc si
+		cmp di,10
+		jne ciclo3
+		inc line
+		jmp substitui_jogador
+	;******************************************************
+	; caso aja espaços em branco, vai preencher diretamente
+	; com o jogador no final 
+	;******************************************************			
+	preenche_novo_jogador:
+		
+		mov bl, minutosb[0]
+		mov Top10_jogadores[si],bl
+		inc si
+		mov bl, minutosb[1]
+		mov Top10_jogadores[si],bl
+		add si,2
+		mov bl, segundosb[0]
+		mov Top10_jogadores[si],bl
+		inc si
+		mov bl, segundosb[1]
+		mov Top10_jogadores[si],bl
+		add si, 4
+		mov di,2
+
+	ciclo2:
+		mov al,nome_jogador[di]
+		mov Top10_jogadores[si],al
+		inc di
+		inc si
+		cmp di,10
+		jne ciclo2
+		jmp fim_preenche
+	;******************************************************
+	; se nao verifica nenhuma das duas ocorrencias
+	; incrementa linha para ir para a proxima 
+	;******************************************************
+	inc_linha_substitui:
+		inc line
+		jmp espacos_vazios
+		
+	fim_preenche:
+			
+		pop si
+		pop di
+		pop bx
+		pop ax
+		ret
+		
+top10_incrementa_novo_jogador ENDP
 
 ;########################################################################
 ;									Menus
@@ -1774,7 +2306,12 @@ main_menu proc
 			jmp menu_loop
 
 	topTen:
-			obtem_string msgAskPlayer
+			call Ler_Dados_Ficheiro_Top10
+			call display_TOP10
+
+			mov ah,0
+			call LE_TECLA
+			
 			jmp menu_loop
 
 	fim:
