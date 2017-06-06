@@ -1,10 +1,10 @@
- 00m04s  sda       
-  0m  s            
+ 00m03s  jose      
+ 00m30s  Jorge     
+ 00m37s  vanner    
  00m45s  joao      
  00m50s  Francis   
- 10m05s  Cristina  
- 10m10s  Maria     
- 10m15s  Joana   a 
- 10m25s  Margarid  
- 10m30s  Jose      
- 
+ 00m05s  Ana       
+ 00m10s  Maria     
+ 00m15s  Joana     
+ 00m25s  Marli     
+ 00m30s  Carlos    

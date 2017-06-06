@@ -95,8 +95,8 @@ dseg	segment para public 'data'
 		msgErrorFim		db	'Nao existe um fim no labirinto selecionado!$'
 		msgErrorOpenMap	db	'Nao foi possivel abrir o labirinto!$'
 		msgGanhou		db	'Ganhou!$'
-		msgInfoWin		db	'Tempo decorrido: ',13,10
-						db	'Nome do Jogador: ','$',0
+		msgInfoWin		db	'Tempo decorrido:   m  s ',13,10
+						db	'Nome do Jogador:           ','$',0
 		
 
 		;####################################################################################################################
@@ -134,7 +134,7 @@ dseg	segment para public 'data'
 								db   ' Tempo   Nome                    ',13,10
 								db   "______________",13,10
 								
-		Top10_jogadores			db	 "   m  s  ","          ",13,10
+		Top10_jogadores			db	 " 00m20s  ","Rita      ",13,10
 								db	 " 00m45s  ","joao      ",13,10
 								db   " 00m50s  ","Francis   ",13,10
 								db   " 01m05s  ","Cristina  ",13,10
@@ -150,7 +150,7 @@ dseg	segment para public 'data'
 ; Variaveis para escrever no ficheiro
 ;********************************************************************************
 
-		Top10_File				db	'Top10.TXT',0
+		Top10_File				db	'TOP10.TXT',0
 		msgErrorCreate_File		db	"Ocorreu um erro na criacao do ficheiro!$"
 		msgErrorWrite_File		db	"Ocorreu um erro na escrita para ficheiro!$"
 		msgErrorClose_File		db	"Ocorreu um erro no fecho do ficheiro!$"
@@ -177,7 +177,6 @@ dseg	segment para public 'data'
 		pos2					db  ?
 		pos3     				db  ?
 		pos4 					db  ?
-		classificacao_top10   	db  ?
 		nome_top10				db 	10 dup(?)
 		tempo_top10				db 	8  dup(?)	
 		tempo_fim_jogo			db 	'  m  s$'
@@ -398,8 +397,8 @@ Trata_Horas PROC
 			add		ah,	30h				; Caracter Correspondente às unidades
 			mov		minutosb[0],al
 			mov 	minutosb[1],ah
-			mov		tempo_fim_jogo[0],al
-			mov 	tempo_fim_jogo[1],ah
+			mov		msgInfoWin[17],al   ; escreve para dentro do vetor para apresentar no ecran
+			mov 	msgInfoWin[18],ah   ; escreve para dentro do vetor para apresentar no ecran
 			MOV 	STR12[0],al			; 
 			MOV 	STR12[1],ah
 			MOV 	STR12[2],'m'		
@@ -414,8 +413,8 @@ Trata_Horas PROC
 			add		ah,	30h
 			mov		segundosb[0],al
 			mov 	segundosb[1],ah 
-			mov		tempo_fim_jogo[3],al
-			mov 	tempo_fim_jogo[4],ah	; Caracter Correspondente às unidades
+			mov		msgInfoWin[20],al   ; escreve para dentro do vetor para apresentar no ecran
+			mov 	msgInfoWin[21],ah   ; escreve para dentro do vetor para apresentar no ecran 
 			MOV 	STR12[0],al			 
 			MOV 	STR12[1],ah
 			MOV 	STR12[2],'s'		
@@ -467,7 +466,8 @@ obtem_string_jogo macro str
 endm
 
 obtem_string_nome_jogador macro str
-
+	push si
+	push di
 	call apaga_ecran
 	goto_xy	24,10
 	mov ah,09h
@@ -488,6 +488,26 @@ obtem_string_nome_jogador macro str
 	mov al, ' '
 	mov [si], al 						;REPLACE CHR(12) BY '$'.            
 	call trata_nome_com_sifrao
+	
+	mov di, 0
+	mov si, 43
+	;########################################################################
+	;		Ciclo para tratar nome para mostrar no menu pos jogo win
+	;########################################################################
+
+	ciclo_move_nome:
+	
+		mov al, nome_com_sifrao[di]
+		mov msgInfoWin[si], al
+		inc si
+		inc di
+		cmp di, 9
+		jne ciclo_move_nome
+
+		pop si
+		pop di
+
+
 endm
 
 obtem_string macro str
@@ -723,9 +743,11 @@ jogo proc
 
 			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 			
-			cmp Car,' '
-			jne movimento
-			jmp IMPRIME
+			cmp Car,73
+			je IMPRIME
+
+			cmp Car,32
+			je IMPRIME
 
 	movimento:
 			goto_xy	POSxa,POSya
@@ -735,7 +757,6 @@ jogo proc
 			mov al, POSya
 			mov POSy,al
 			
-			jmp imprime
 
 	IMPRIME:	
 			mov	ah, 02h
@@ -774,6 +795,9 @@ jogo proc
 			cmp	al,70
 			je	ganhou
 
+			cmp al,73
+			je restart_ciclo
+
 			cmp al,32
 			jne movimento
 
@@ -790,6 +814,9 @@ jogo proc
 			
 			cmp	al,70
 			je	ganhou
+
+			cmp al,73
+			je restart_ciclo
 
 			cmp al,32
 			jne movimento
@@ -809,6 +836,9 @@ jogo proc
 			cmp	al,70
 			je	ganhou
 
+			cmp al,73
+			je restart_ciclo
+
 			cmp al,32
 			jne movimento
 
@@ -827,13 +857,25 @@ jogo proc
 			cmp	al,70
 			je	ganhou
 
+			cmp al,73
+			je restart_ciclo
+
 			cmp al,32
 			jne movimento
 
 			jmp	CICLO
 
+    restart_ciclo:
+
+			mov Game_Time_h,0
+			mov Game_Time_m,0
+			mov Game_Time_s,0
+			jmp CICLO
+			
+
 	
 	erro_encontra_inicio:
+
 			call apaga_ecran
 
 			goto_xy 15,10
@@ -878,6 +920,8 @@ jogo proc
 
 	ganhou:
 			; trata o top 10
+			xor si,si
+			xor di,di
 			call Ler_Dados_Ficheiro_Top10
 			call top10_incrementa_novo_jogador
 			call Escreve_dados_Ficheiro_Top10
@@ -887,14 +931,8 @@ jogo proc
 			goto_xy	37,10
 			MOSTRA msgGanhou
 
-			goto_xy 0,11
+			goto_xy 0,14
 			MOSTRA	msgInfoWin
-			
-			goto_xy	30,13
-			MOSTRA	tempo_fim_jogo
-
-			goto_xy	19,14
-			MOSTRA nome_com_sifrao
 			
 			mov	ah,0
 			call LE_TECLA
@@ -1783,6 +1821,7 @@ abre_labirinto_default endp
 display_TOP10 proc
 
 		;apaga ecra e posiciona o cursor no inicio.
+		call Ler_Dados_Ficheiro_Top10
 		call apaga_ecran
 		goto_xy 0,0
 
@@ -1799,6 +1838,7 @@ display_TOP10 proc
 		ret
 	
 display_TOP10 endp
+
 
 ; #####################################################################
 ; Trata nome para  poder ser imprimido corretamente
@@ -1860,7 +1900,7 @@ Escreve_dados_Ficheiro_Top10 PROC
 		mov	ah, 40h						; indica que vamos escrever 
 			
 		lea	dx, Top10_jogadores			; Vamos escrever o que estiver no endereço DX
-		mov	cx, 190						; vamos escrever multiplos bytes duma vez só
+		mov	cx, 210						; vamos escrever multiplos bytes duma vez só
 		int	21h							; faz a escrita 
 		jnc	close						; se não acontecer erro fecha o ficheiro 
 		
@@ -1887,23 +1927,6 @@ Escreve_dados_Ficheiro_Top10 ENDP
 ;              					  LÊ do ficheiro
 ;****************************************************************************************
 	
-copia_linha_top10_para_vetor proc
-	
-	push ax
-	
-	mov al, classificacao_top10               	   	;                   	
-	mov Top10_jogadores[0], al					  	;
-													;
-	mov al, nome_top10								;
-	mov Top10_jogadores[1], al						; preenche as respetivas linhas com os dados de cada classificaçao
-													;
-	mov al, tempo_top10								;
-	mov Top10_jogadores[2], al						;
-	
-	pop ax
-	
-copia_linha_top10_para_vetor endp		
-		
 Ler_Dados_Ficheiro_Top10 PROC
 	
 		push ax
@@ -1919,57 +1942,18 @@ Ler_Dados_Ficheiro_Top10 PROC
 		jc      erro_abrir
 		mov     HandleFile_Read,ax						; para onde aponta o ponteiro na memoria;
 		
-	inicio:
-	
-		xor	    si,si								; inicio da leitura do ficheiro vai chamar o ciclo1
-		jmp		ler_ciclo1
-		
-	resete_contador:								
-		
-		mov     contador,1							; reseta contador para iniciar a leitura no inicio da nova linha
-		inc 	linha	
-		jmp		ler_ciclo1
 				
-	ler_nome:
+	ler:
 	
-		mov			cx, 10							;; vai ler 10 bytes de cada vez, ara preencher o nome
-		lea 		dx, nome_top10
-		mov 		contador,2
-		jmp 		ler_ciclo2
-		
-	read_tempo:
-	
-		mov 		cx, 9							;; vai ler 8 bytes de cada vez para preencher a hora
-		lea			dx, tempo_top10
-		jmp 		ler_ciclo2
-		
-		
-	ler_ciclo1:									; contador vai servir para defenir o numero de bits que se vai ler do ficheiro de cada vez;
 			
-		cmp			contador, 2				; se contador for igual a 1 vai para ler nome
-		je			ler_nome
-		
-		cmp 		contador, 1				; se contador for igual a 2 vai para ler tempo
-		je  		read_tempo
-		
-	ler_ciclo2:
-	
 		mov     	ah, 3fh							; ficheiro aberto para leitura
 		mov     	bx, HandleFile_Read
-		
+		mov			cx, 210							;; vai ler 10 bytes de cada vez, ara preencher o nome
+		lea 		dx,Top10_jogadores
 		int     	21h								; mostra erro se nao conseguir abrir o ficheiro
 		jc	    	erro_ler
-		
-		cmp		    ax, 0							; verifica se já chegou o fim de ficheiro EOF? 
-		je			fecha_ficheiro					; se chegou ao fim do ficheiro fecha e sai
-					
-		cmp			caracter_TOP10, 13				; verifica se já chegou ao fim da linha do ficheiro, 
-		je			resete_contador					; se chegou ao fim  
-	
-		cmp 		linha, 10
-		je  		Fim	
-		jmp			ler_ciclo1						; vai ler o próximo caracter
-		
+		jmp			fecha_ficheiro
+
 	erro_abrir:										
 	
 		mov    	ah,09h
@@ -2018,6 +2002,8 @@ top10_incrementa_novo_jogador proc
 			push si
 			
 			mov line, 0
+			mov si, 0
+			mov di, 0
 	;******************************************************
 	; verifica espaços vazios
 	;******************************************************
