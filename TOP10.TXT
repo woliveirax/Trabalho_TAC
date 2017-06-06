@@ -1,4 +1,5 @@
  00m03s  jose      
+ 00m05s  flor      
  00m30s  Jorge     
  00m37s  vanner    
  00m45s  joao      
@@ -7,4 +8,3 @@
  00m10s  Maria     
  00m15s  Joana     
  00m25s  Marli     
- 00m30s  Carlos    
