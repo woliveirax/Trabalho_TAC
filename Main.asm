@@ -101,8 +101,9 @@ dseg	segment para public 'data'
 
 		;####################################################################################################################
 		;Variaveis do EXTRA
-
-
+		
+		ProxPOSx	db	0
+		ProxPOSy	db	0
 
 		;####################################################################################################################
 		;Variaveis do temporizador
@@ -221,6 +222,19 @@ goto_xy	macro	POSx,POSy
 		mov		dl,POSx	;Pos X do ecrã, vai de 0 a 80
 		mov		dh,POSy ;Pos Y do ecrã, vai de 0 a 25
 		int		10h		;interrupt call
+endm
+
+goto_Prox_xy macro ProxPOSx,ProxPOSy
+		mov		ah,02h
+		mov		bh,0		; numero da p�gina
+		mov		dl,ProxPOSx
+		mov		dh,ProxPOSy
+		int		10h
+		mov 	ah, 08h
+		mov		bh,	0		; numero da p�gina
+		int		10h
+		mov		Car, al	; Guarda o Caracter que esta na posicao do Cursor
+		mov		Cor, ah	; Guarda a cor que esta na posicao do Cursor
 endm
 
 ;########################################################################
@@ -953,8 +967,6 @@ jogo endp
 ;Procedure para encontrar fim do labirinto
 
 jogo_alternativo proc
-
-	restart:
 			; Reinicia o contador do jogo
 			mov Game_Time_h,0
 			mov Game_Time_m,0
@@ -962,7 +974,7 @@ jogo_alternativo proc
 			
 			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
 			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
-
+	restart:
 			obtem_string_nome_jogador msgAskPlayer
 			cmp jname[2],32
 			je erro_nome_jogador
@@ -1005,145 +1017,221 @@ jogo_alternativo proc
 			cmp al,1
 			je	erro_encontra_fim
 			
+
+	inicio_bonus:		
 			;Inicializa posicoes anteriores ( pois no inicio do jogo nao existem posicoes anteriores )
-			mov al,POSx
-			mov POSxa,al
-
-			mov al,POSy
-			mov POSya,al
-
 			goto_xy	POSx,POSy	; Vai para nova possi��o
-			mov ah, 08h			; Guarda o Caracter que est� na posi��o do Cursor
-			mov	bh, 0			; numero da p�gina
-			int	10h
-			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
-			
-	CICLO:
-			
-			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
-			mov	ah, 02h
-			mov	dl, Car			; Repoe Caracter guardado
-			int	21h
+			mov		al, POSx	; Guarda a posi��o do cursor
+			mov		POSxa, al
+			mov		al, POSy	; Guarda a posi��o do cursor
+			mov 	POSya, al
 
-			goto_xy	POSx,POSy	; Vai para nova possi��o
-			mov ah, 08h
-			mov	bh,0			; numero da p�gina
-			int	10h
-			mov	Car, al			; Guarda o Caracter que est� na posi��o do Cursor
+			mov		al, POSx	; Guarda a posi��o do cursor
+			mov		ProxPOSx, al
+			mov		al, POSy	; Guarda a posi��o do cursor
+			mov 	ProxPOSy, al
 
-			goto_xy	POSx,POSy	; Vai para posi��o do cursor
-			
-			cmp Car,' '
-			jne movimento
-			jmp IMPRIME
-
-	movimento:
-			goto_xy	POSxa,POSya
-
-			mov al,POSxa
-			mov POSx,al
-			mov al, POSya
-			mov POSy,al
-			
-			jmp imprime
-
-	IMPRIME:	
-			mov	ah, 02h
-			mov	dl, 190			; Coloca AVATAR
-			int	21H
-			
-			goto_xy	POSx,POSy	; Vai para posi��o do cursor
-
-			mov	al, POSx		; Guarda a posi��o do cursor
-			mov	POSxa, al
-			mov	al, POSy		; Guarda a posi��o do cursor
-			mov POSya, al
-
-	LER_SETA:
 			mov ah,1
 			call LE_TECLA
 
-			cmp	ah, 1
-			je	ESTEND
+			cmp al, 48
+			mov cx, 1
+			je bonus_cima
 
-			cmp AL, 27			; ESCAPE
-			je	FIM
+			cmp al, 49
+			mov cx, 2
+			je bonus_cima
 
-			jmp	LER_SETA
+			cmp al, 50
+			mov cx, 3
+			je bonus_cima
 
-	ESTEND:	
-			cmp al,49			; Cima
-			jne	BAIXO
+			cmp al, 51
+			mov cx, 4
+			je bonus_cima
 
-			cmp POSy,3
-			je	LER_SETA
+			cmp al, 52
+			mov cx, 1
+			je bonus_baixo
 
-			dec	POSy
-			call get_nextPos
+			cmp al, 53
+			mov cx, 2
+			je bonus_baixo
+
+			cmp al, 54
+			mov cx, 3
+			je bonus_baixo
+
+			cmp al, 55
+			mov cx, 4
+			je bonus_baixo
+
+			cmp al, 56
+			mov cx, 1
+			je bonus_direita
+
+			cmp al, 57
+			mov cx, 2
+			je bonus_direita
+
+			cmp al, 97
+			mov cx, 3
+			je bonus_direita
+
+			cmp al, 98
+			mov cx, 4
+			je bonus_direita
+
+			cmp al, 99
+			mov cx, 1
+			je bonus_esquerda
+
+			cmp al, 100
+			mov cx, 2
+			je bonus_esquerda
+
+			cmp al, 101
+			mov cx, 3
+			je bonus_esquerda
+
+			cmp al, 102
+			mov cx, 4
+			je bonus_esquerda
+
+			cmp al,27
+			je  fim
+
+			cmp al, 48
+			jb inicio_bonus
+			cmp al, 97
+			jb	inicio_bonus
+			cmp al, 102
+			ja  inicio_bonus
+
+			cmp al,27
+			jne	inicio_bonus
+			jmp fim
+
+	bonus_cima:
+			dec 	ProxPOSy
+			goto_Prox_xy ProxPOSx,ProxPOSy  ; Mudar de posicao para a seguinte
 			
-			cmp	al,70
-			je	ganhou
+			cmp   	al, 70
+			je   	ganhou
 
-			cmp al,32
-			jne movimento
+			cmp 	al, 20h 				; Verificacao se esta esta ocupada
+			jne 	inicio_bonus
 
-			jmp	CICLO
+	bonus_cima_imprime:
+			dec 	POSy
+			goto_xy	POSxa,POSya	
+			; Vai para a posi��o anterior do cursor
+			mov		ah, 02h
+			mov		dl, Car	; Repoe Caracter guardado
+			int		21H
 
-	BAIXO:	cmp	al,50			; Baixo
-			jne	ESQUERDA
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov 	ah, 08h
+			mov		bh,0		; numero da p�gina
+			int		10h
+			mov		Car, al	; Guarda o Caracter que est� na posi��o do Cursor
+			mov		Cor, ah	; Guarda a cor que est� na posi��o do Cursor
 
-			cmp POSy,22
-			je	LER_SETA
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 
-			inc POSy
-			call get_nextPos
-			
-			cmp	al,70
-			je	ganhou
+			loop bonus_cima
+			jmp inicio_bonus
 
-			cmp al,32
-			jne movimento
+	bonus_baixo:
+			inc 	ProxPOSy
+			goto_Prox_xy ProxPOSx,ProxPOSy  ; Mudar de posicao para a seguinte
 
-			jmp	CICLO
+			cmp   al, 70
+			je    ganhou
 
-	ESQUERDA:
-			cmp	al,51			; Esquerda
-			jne	DIREITA
+			cmp 	al, 20h ; Verificacao se esta esta ocupada
+			jne 	inicio_bonus
 
-			cmp POSx,20
-			je LER_SETA
-			
-			dec	POSx
-			call get_nextPos
+	bonus_baixo_imprime:
+			inc 	POSy
+			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+			mov		ah, 02h
+			mov		dl, Car	; Repoe Caracter guardado
+			int		21H
 
-			cmp	al,70
-			je	ganhou
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov 	ah, 08h
+			mov		bh,0		; numero da p�gina
+			int		10h
+			mov		Car, al	; Guarda o Caracter que est� na posi��o do Cursor
+			mov		Cor, ah	; Guarda a cor que est� na posi��o do Cursor
 
-			cmp al,32
-			jne movimento
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
 
-			jmp	CICLO
+			loop bonus_baixo
+			jmp inicio_bonus
 
-	DIREITA:
-			cmp	al,52			; Direita
-			jne	LER_SETA
+	bonus_direita:
+			inc 	ProxPOSx
+			goto_Prox_xy ProxPOSx,ProxPOSy  ; Mudar de posicao para a seguinte
 
-			cmp POSx,59
-			je	LER_SETA
+			cmp   al, 70
+			je    ganhou
 
-			inc POSx
-			call get_nextPos
-			
-			cmp	al,70
-			je	ganhou
+			cmp 	al, 20h ; Verificacao se esta esta ocupada
+			jne		inicio_bonus
 
-			cmp al,32
-			jne movimento
+	bonus_direita_imprime:
+			jne 	inicio_bonus
+			inc 	POSx
+			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+			mov		ah, 02h
+			mov		dl, Car	; Repoe Caracter guardado
+			int		21H
 
-			jmp	CICLO
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov 	ah, 08h
+			mov		bh,0		; numero da p�gina
+			int		10h
+			mov		Car, al	; Guarda o Caracter que est� na posi��o do Cursor
+			mov		Cor, ah	; Guarda a cor que est� na posi��o do Cursor
 
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+
+			loop 	bonus_direita
+			jmp 	inicio_bonus
+
+	bonus_esquerda:
+			dec 	ProxPOSx
+			goto_Prox_xy ProxPOSx,ProxPOSy  ; Mudar de posicao para a seguinte
+
+			cmp   al, 70
+			je    ganhou
+
+			cmp 	al, 20h ; Verificacao se esta esta ocupada
+			jne 	inicio_bonus
+
+	bonus_esquerda_imprime:
+			dec 	POSx
+			goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+			mov		ah, 02h
+			mov		dl, Car	; Repoe Caracter guardado
+			int		21H
+
+			goto_xy	POSx,POSy	; Vai para nova possi��o
+			mov 	ah, 08h
+			mov		bh,0		; numero da p�gina
+			int		10h
+			mov		Car, al	; Guarda o Caracter que est� na posi��o do Cursor
+			mov		Cor, ah	; Guarda a cor que est� na posi��o do Cursor
+
+			goto_xy	POSx,POSy	; Vai para posi��o do cursor
+
+			loop bonus_esquerda
+			jmp inicio_bonus
 	
 	erro_encontra_inicio:
+
 			call apaga_ecran
 
 			goto_xy 15,10
@@ -1187,19 +1275,31 @@ jogo_alternativo proc
 			jmp restart
 
 	ganhou:
-			; ALTERAR A MENSAGEM
-			; adicionar tempo e nome do jogador no fim :)
+			; trata o top 10
+			xor si,si
+			xor di,di
+			call Ler_Dados_Ficheiro_Top10
+			call top10_incrementa_novo_jogador
+			call Escreve_dados_Ficheiro_Top10
+
 			call apaga_ecran
-			
+
 			goto_xy	37,10
 			MOSTRA msgGanhou
 
-			goto_xy 15,11
-			;MOSTRA tempoFim
-			;MOSTRA nome do jogador
+			goto_xy 0,14
+			MOSTRA	msgInfoWin
 			
 			mov	ah,0
 			call LE_TECLA
+			
+			call apaga_ecran
+			goto_xy 15,5
+			call display_TOP10
+			
+			mov ah,0
+			call LE_TECLA
+			
 	fim:
 		ret
 
@@ -2205,7 +2305,7 @@ main_menu proc
 			jmp menu_loop
 
 	gameNormal:
-			call jogo
+			call jogo_alternativo
 			jmp	menu_loop
 
 	opcoes:

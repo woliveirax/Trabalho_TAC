@@ -10,7 +10,7 @@
 		mov		al, POSy	; Guarda a posi��o do cursor
 		mov 	ProxPOSy, al
 
-		mov ah,0
+		mov ah,1
 		call LE_TECLA
 
 		cmp al, 48
@@ -99,6 +99,8 @@ bonus_cima:
 		je    bonus_cima_inicio
 		cmp 	al, 20h ; Verificacao se esta esta ocupada
 		jne 	bonus
+
+
 bonus_cima_imprime:
 		dec 	POSy
 		goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
@@ -118,12 +120,12 @@ bonus_cima_imprime:
 		call imprime1
 		loop bonus_cima
 		jmp bonus
+
 bonus_cima_inicio:
 		call  tempo_t
 		mov   ax, temptotal
 		mov   tempo_inicial, ax
 		jmp 	bonus_cima_imprime
-
 
 bonus_baixo:
 		inc 	ProxPOSy
@@ -132,27 +134,29 @@ bonus_baixo:
 		je    Fim_C
 		cmp   al,73
 		je    bonus_baixo_inicio
-		cmp 	al, 20h ; Verificacao se esta esta ocupada
+		cmp 	al, 20h 				; Verificacao se esta esta ocupada
 		jne 	bonus
+
 bonus_baixo_imprime:
 		inc 	POSy
-		goto_xy	POSxa,POSya	; Vai para a posi��o anterior do cursor
+		goto_xy	POSxa,POSya				; Vai para a posi��o anterior do cursor
 		mov		ah, 02h
-		mov		dl, Car	; Repoe Caracter guardado
+		mov		dl, Car					; Repoe Caracter guardado
 		int		21H
 
-		goto_xy	POSx,POSy	; Vai para nova possi��o
+		goto_xy	POSx,POSy				; Vai para nova possi��o
 		mov 	ah, 08h
-		mov		bh,0		; numero da p�gina
+		mov		bh,0					; numero da p�gina
 		int		10h
-		mov		Car, al	; Guarda o Caracter que est� na posi��o do Cursor
-		mov		Cor, ah	; Guarda a cor que est� na posi��o do Cursor
+		mov		Car, al					; Guarda o Caracter que est� na posi��o do Cursor
+		mov		Cor, ah					; Guarda a cor que est� na posi��o do Cursor
 
-		goto_xy	POSx,POSy	; Vai para posi��o do cursor
+		goto_xy	POSx,POSy				; Vai para posi��o do cursor
 
 		call imprime1
 		loop bonus_baixo
 		jmp bonus
+
 bonus_baixo_inicio:
 		call  tempo_t
 		mov   ax, temptotal
@@ -167,6 +171,7 @@ bonus_direita:
 		cmp   al,73
 		je    bonus_direita_inicio
 		cmp 	al, 20h ; Verificacao se esta esta ocupada
+
 bonus_direita_imprime:
 		jne 	bonus
 		inc 	POSx
@@ -186,7 +191,8 @@ bonus_direita_imprime:
 
 		call 	imprime1
 		loop 	bonus_direita
-		jmp 	bonus
+		jmp 	inicio_bonus
+
 bonus_direita_inicio:
 		call  tempo_t
 		mov   ax, temptotal
