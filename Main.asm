@@ -95,27 +95,14 @@ dseg	segment para public 'data'
 		msgErrorFim		db	'Nao existe um fim no labirinto selecionado!$'
 		msgErrorOpenMap	db	'Nao foi possivel abrir o labirinto!$'
 		msgGanhou		db	'Ganhou!$'
+		msgInfoWin		db	'Tempo decorrido: ',13,10
+						db	'Nome do Jogador: ','$',0
 		
 
 		;####################################################################################################################
 		;Variaveis do EXTRA
 
-		 POSx_Saved	db	0
-		 POSy_Saved	db	0
 
-		 ; The compass can vary from 4 values
-		 ; 0 - NORTH
-		 ; 1 - SOUTH
-		 ; 2 - WEST
-		 ; 3 - EAST
-		 compass db 0
-		 
-		 ; The position variables can vary from 0's and 1's meaning there is a wall if it's at 1
-		 ; These will be updated at every step along with the orientation
-		 straight	db	0
-		 back	db	0
-		 left	db 	0
-		 right	db 	0
 
 		;####################################################################################################################
 		;Variaveis do temporizador
@@ -192,8 +179,8 @@ dseg	segment para public 'data'
 		pos4 					db  ?
 		classificacao_top10   	db  ?
 		nome_top10				db 	10 dup(?)
-		tempo_top10				db 	8  dup(?) 	
-		
+		tempo_top10				db 	8  dup(?)	
+		tempo_fim_jogo			db 	'  m  s$'
 
 ;*********************************************************************************
 ; 						variaveis para gravar jogador
@@ -409,6 +396,10 @@ Trata_Horas PROC
 			div 	bl
 			add 	al, 30h				; Caracter Correspondente às dezenas
 			add		ah,	30h				; Caracter Correspondente às unidades
+			mov		minutosb[0],al
+			mov 	minutosb[1],ah
+			mov		tempo_fim_jogo[0],al
+			mov 	tempo_fim_jogo[1],ah
 			MOV 	STR12[0],al			; 
 			MOV 	STR12[1],ah
 			MOV 	STR12[2],'m'		
@@ -420,14 +411,18 @@ Trata_Horas PROC
 			MOV 	bl, 10     
 			div 	bl
 			add 	al, 30h				; Caracter Correspondente às dezenas
-			add		ah,	30h				; Caracter Correspondente às unidades
-			MOV 	STR12[0],al			; 
+			add		ah,	30h
+			mov		segundosb[0],al
+			mov 	segundosb[1],ah 
+			mov		tempo_fim_jogo[3],al
+			mov 	tempo_fim_jogo[4],ah	; Caracter Correspondente às unidades
+			MOV 	STR12[0],al			 
 			MOV 	STR12[1],ah
 			MOV 	STR12[2],'s'		
 			MOV 	STR12[3],'$'
 			GOTO_XY	74,14				; alterar a posiçao das segundos coluna/linha
 			MOSTRA STR12				; 
-								
+
 	fim_horas:		
 			goto_xy	POSx,POSy			; Volta a colocar o cursor onde estava antes de actualizar as horas
 			
@@ -471,6 +466,30 @@ obtem_string_jogo macro str
 
 endm
 
+obtem_string_nome_jogador macro str
+
+	call apaga_ecran
+	goto_xy	24,10
+	mov ah,09h
+	lea dx,str
+	int 21h
+	goto_xy	34,11
+
+	mov ah, 0Ah
+	mov dx,offset nome_jogador			; onde fica guardado o nome do jogador
+	int 21h
+
+										;CHANGE CHR(12) BY '$'.
+	mov si, offset nome_jogador+1 	;NUMBER OF CHARACTERS ENTERED.
+	mov cl, [si] 						;MOVE LENGTH TO CL.
+	mov ch, 0      						;CLEAR CH TO USE CX. 
+	inc cx 								;TO REACH CHR(6).
+	add si, cx 							;NOW SI POINTS TO CHR(12).
+	mov al, ' '
+	mov [si], al 						;REPLACE CHR(12) BY '$'.            
+	call trata_nome_com_sifrao
+endm
+
 obtem_string macro str
 	call apaga_ecran
 	goto_xy	24,10
@@ -489,28 +508,6 @@ obtem_string macro str
 	mov al, ' '
 	mov [si], al 				;REPLACE CHR(12) BY '$'.            
 
-endm
-
-obtem_string_nome_jogador macro str
-	call apaga_ecran
-
-	goto_xy	24,10
-	mov ah,09h
-	lea dx,str
-	int 21h
-	goto_xy	34,11
-
-	mov ah, 0Ah
-	mov dx,offset jname
-	int 21h
-	
-	mov si, offset jname + 1 	;NUMBER OF CHARACTERS ENTERED.
-	mov cl, [si] 				;MOVE LENGTH TO CL.
-	mov ch, 0      				;CLEAR CH TO USE CX. 
-	inc cx 						;TO REACH CHR(6).
-	add si, cx 					;NOW SI POINTS TO CHR(12).
-	mov al, ' '
-	mov [si], al 				;REPLACE CHR(12) BY '$'.
 endm
 
 ;########################################################################
@@ -643,6 +640,8 @@ mostra_mapas proc
 	ret
 mostra_mapas endp
 
+;mete o caractere que esta em AL no na posicao do ecra
+
 jogo proc
 
 	restart:
@@ -654,8 +653,8 @@ jogo proc
 			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
 			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
 
-			obtem_string_nome_jogador msgAskPlayer
-			cmp jname[2],32
+			obtem_string_nome_jogador	msgAskPlayer
+			cmp nome_jogador[2],32
 			je erro_nome_jogador
 
 			call apaga_ecran
@@ -878,19 +877,35 @@ jogo proc
 			jmp restart
 
 	ganhou:
-			; ALTERAR A MENSAGEM
-			; adicionar tempo e nome do jogador no fim :)
+			; trata o top 10
+			call Ler_Dados_Ficheiro_Top10
+			call top10_incrementa_novo_jogador
+			call Escreve_dados_Ficheiro_Top10
+
 			call apaga_ecran
-			
+
 			goto_xy	37,10
 			MOSTRA msgGanhou
 
-			goto_xy 15,11
-			;MOSTRA tempoFim
-			;MOSTRA nome do jogador
+			goto_xy 0,11
+			MOSTRA	msgInfoWin
+			
+			goto_xy	30,13
+			MOSTRA	tempo_fim_jogo
+
+			goto_xy	19,14
+			MOSTRA nome_com_sifrao
 			
 			mov	ah,0
 			call LE_TECLA
+			
+			call apaga_ecran
+			goto_xy 15,5
+			call display_TOP10
+			
+			mov ah,0
+			call LE_TECLA
+			
 	fim:
 		ret
 
@@ -899,98 +914,23 @@ jogo endp
 ;########################################################################
 ;Procedure para encontrar fim do labirinto
 
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
-; 										Algorithm											 ;
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
-;																							 ;
-; 1 - O avatar ira mover-se para a direita sempre que possivel								 ;
-; 2 - Se o caminho para direita estiver bloqueado, devera seguir em frente					 ;
-; 3 - Se o caminho da direita e em frente estiverem bloqueados devera ir para a esquerda	 ;
-; 4 - Se todos os caminhos estiverem bloqueados, o avatar devera voltar para tras.			 ;
-;																							 ;
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -;
+jogo_alternativo proc
 
-
-init_pos proc
-
-	mov straight,0
-	mov	back,0
-	mov left,0
-	mov right,0
-
-	ret
-init_pos endp
-
-obtem_surroundings proc
-
-		call init_pos
-
-		dec POSy
-		goto_xy POSx,POSy
-
-		mov ah,08h
-		mov bh,0
-		int 10h
-		
-		cmp al,32
-		jne voltar_atras
-		mov straight,1
-
-		inc POSy
-
-	voltar_atras:
-		
-		inc POSy
-		goto_xy POSx,POSy
-
-		mov ah,08h
-		mov bh,0
-		int 10h
-		
-		cmp al,32
-		jne esquerda
-		mov back,1
-
-		dec POSy
-
-	esquerda:
-
-		dec POSx
-		goto_xy POSx,POSy
-
-		mov ah,08h
-		mov bh,0
-		int 10h
-		
-		cmp al,32
-		jne direita
-		mov left,1
-
-		inc POSx
-
-	direita:
-
-		inc POSx
-		goto_xy POSx,POSy
-
-		mov ah,08h
-		mov bh,0
-		int 10h
-		
-		cmp al,32
-		jne fim
-		mov right,1
-
-		dec POSx
-
-	fim:
-		ret
-obtem_surroundings endp
-
-jogo_extra proc
+	restart:
+			; Reinicia o contador do jogo
+			mov Game_Time_h,0
+			mov Game_Time_m,0
+			mov Game_Time_s,0
 			
+			; O labirinto por omissao estará guardado dento de um ficheiro chamado def.txt.
+			; Este ficheiro so sera alterado quando for feita a alteracao no menu de alterar labirinto por omissao.
+
+			obtem_string_nome_jogador msgAskPlayer
+			cmp jname[2],32
+			je erro_nome_jogador
+
 			call apaga_ecran
-			call mostra_mapas						; mostra escolha possiveis que vem com o jogo
+			call mostra_mapas
 			
 			obtem_string_jogo msgAskFich			; pede labirinto para jogar
 			cmp	fname[2],32							; verifica se o nome do labirinto = a espaço
@@ -998,6 +938,7 @@ jogo_extra proc
 
 	labirinto_default:
 			call apaga_ecran
+			call draw_instruct_jogo
 
 			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra			
 			call abre_labirinto_default			; carrega o labirinto def.txt - labirinto por defeito para o ecra
@@ -1008,6 +949,7 @@ jogo_extra proc
 
 	abre_labirinto_selecionado:
 			call apaga_ecran
+			call draw_instruct_jogo
 
 			;verifica se houve erro ao abrir ou escrever o labirinto para o ecra
 			call abre_labirinto
@@ -1079,12 +1021,24 @@ jogo_extra proc
 			mov	al, POSy		; Guarda a posi��o do cursor
 			mov POSya, al
 
-	CIMA:	
-			cmp al,48h			; Cima
+	LER_SETA:
+			mov ah,1
+			call LE_TECLA
+
+			cmp	ah, 1
+			je	ESTEND
+
+			cmp AL, 27			; ESCAPE
+			je	FIM
+
+			jmp	LER_SETA
+
+	ESTEND:	
+			cmp al,49			; Cima
 			jne	BAIXO
 
 			cmp POSy,3
-			;je	LER_SETA
+			je	LER_SETA
 
 			dec	POSy
 			call get_nextPos
@@ -1097,11 +1051,11 @@ jogo_extra proc
 
 			jmp	CICLO
 
-	BAIXO:	cmp	al,50h			; Baixo
+	BAIXO:	cmp	al,50			; Baixo
 			jne	ESQUERDA
 
 			cmp POSy,22
-			;je	LER_SETA
+			je	LER_SETA
 
 			inc POSy
 			call get_nextPos
@@ -1115,11 +1069,11 @@ jogo_extra proc
 			jmp	CICLO
 
 	ESQUERDA:
-			cmp	al,4Bh			; Esquerda
+			cmp	al,51			; Esquerda
 			jne	DIREITA
 
 			cmp POSx,20
-			;je LER_SETA
+			je LER_SETA
 			
 			dec	POSx
 			call get_nextPos
@@ -1133,11 +1087,11 @@ jogo_extra proc
 			jmp	CICLO
 
 	DIREITA:
-			cmp	al,4Dh			; Direita
-			;jne	LER_SETA
+			cmp	al,52			; Direita
+			jne	LER_SETA
 
 			cmp POSx,59
-			;je	LER_SETA
+			je	LER_SETA
 
 			inc POSx
 			call get_nextPos
@@ -1183,14 +1137,35 @@ jogo_extra proc
 
 			jmp labirinto_default
 
+	erro_nome_jogador:
+			call apaga_ecran
+			
+			goto_xy 15,10
+			MOSTRA msgErrorName
+
+			mov	ah,0
+			call LE_TECLA
+
+			jmp restart
+
 	ganhou:
+			; ALTERAR A MENSAGEM
+			; adicionar tempo e nome do jogador no fim :)
+			call apaga_ecran
+			
+			goto_xy	37,10
+			MOSTRA msgGanhou
+
+			goto_xy 15,11
+			;MOSTRA tempoFim
+			;MOSTRA nome do jogador
 			
 			mov	ah,0
 			call LE_TECLA
 	fim:
 		ret
 
-jogo_extra endp
+jogo_alternativo endp
 
 ;########################################################################
 ;Procedure para alterar o labirinto por omissao
@@ -1804,6 +1779,7 @@ abre_labirinto_default endp
 ;########################################################################
 ;					 			   TOP 10
 ;########################################################################
+
 display_TOP10 proc
 
 		;apaga ecra e posiciona o cursor no inicio.
@@ -1863,30 +1839,6 @@ trata_nome_com_sifrao PROC
 		pop ax
 		ret
 trata_nome_com_sifrao ENDP
-
-obtem_string_nome_jogador macro str
-
-	call apaga_ecran
-	goto_xy	24,10
-	mov ah,09h
-	lea dx,str
-	int 21h
-	goto_xy	34,11
-
-	mov ah, 0Ah
-	mov dx,offset nome_jogador			; onde fica guardado o nome do jogador
-	int 21h
-
-										;CHANGE CHR(12) BY '$'.
-	mov si, offset nome_jogador+1 	;NUMBER OF CHARACTERS ENTERED.
-	mov cl, [si] 						;MOVE LENGTH TO CL.
-	mov ch, 0      						;CLEAR CH TO USE CX. 
-	inc cx 								;TO REACH CHR(6).
-	add si, cx 							;NOW SI POINTS TO CHR(12).
-	mov al, ' '
-	mov [si], al 						;REPLACE CHR(12) BY '$'.            
-	call trata_nome_com_sifrao
-endm
 
 Escreve_dados_Ficheiro_Top10 PROC
 
@@ -2059,159 +2011,128 @@ Ler_Dados_Ficheiro_Top10 ENDP
 ;****************************************************************************************
 
 top10_incrementa_novo_jogador proc
-	
-		push ax
-		push bx
-		push di
-		push si
 		
-		mov line, 0
+			push ax
+			push bx
+			push di
+			push si
+			
+			mov line, 0
 	;******************************************************
 	; verifica espaços vazios
 	;******************************************************
 	espacos_vazios:
 
-		cmp line, 10
-		je fim_preenche
-		mov bl, line
-		mov al, total_bytes
-		mul bl
-		mov si, ax
-		inc si
-		cmp Top10_jogadores[si], ' '
-		je preenche_novo_jogador
+			cmp line, 10
+			je fim_preenche
+			mov bl, line
+			mov al, total_bytes
+			mul bl
+			mov si, ax
+			inc si
+			cmp Top10_jogadores[si], ' '
+			je escreve1
 	;******************************************************
 	; se nao encontra espaços vazios vai substituir jogador
 	;******************************************************
-	substitui_jogador:
-			
-		mov bl, minutosb[0]
-		cmp bl, Top10_jogadores[si]
-		je proximo1
-		jb escreve1
-		ja inc_linha_substitui
-		inc si
+		substitui_jogador:
+				
+			mov bl, minutosb[0]
+			cmp bl, Top10_jogadores[si]
+			je proximo1
+			jb escreve1
+			inc si
 	;******************************************************
 	; vai procurar nas casas dos segundos se o tempo do 
 	;novo jogadoré menor que os que existem no top10
 	;******************************************************		
-	proximo1:
+		proximo1:
 
-		inc si
-		mov bl, minutosb[1]
-		cmp bl, Top10_jogadores[si]
-		je proximo2
-		jb escreve1
-		ja inc_linha_substitui
-		
-	proximo2:
-		
-		add si,2
-		mov bl, segundosb[0]
-		cmp bl, Top10_jogadores[si]
-		je proximo3
-		jb escreve1
-		ja inc_linha_substitui
-		
-	proximo3:
-		
-		inc si
-		mov bl, segundosb[1]
-		cmp bl, Top10_jogadores[si]
-		jb  escreve1
-		ja	inc_linha_substitui
-		add si, 4
-		mov di,2
+			inc si
+			mov bl, minutosb[1]
+			cmp bl, Top10_jogadores[si]
+			je proximo2
+			jb escreve1
+
+			
+		proximo2:
+			
+			add si,2
+			mov bl, segundosb[0]
+			cmp bl, Top10_jogadores[si]
+			je proximo3
+			jb escreve1
+			
+		proximo3:
+			
+			inc si
+			mov bl, segundosb[1]
+			cmp bl, Top10_jogadores[si]
+			jb  escreve1
+			add si, 4
+			mov di,2
+			inc line
+			jmp espacos_vazios
+			
 	;******************************************************
 	; vai escrever o jogador novo, se ultrapassar
 	; os records atuais
 	;******************************************************
-	escreve1:
-		
-		mov bl, line
-		mov al,total_bytes
-		mul bl
-		mov si, ax
-		inc si
-		mov bl, Top10_jogadores[si]
-		mov dl, minutosb[0]
-		mov Top10_jogadores[si],dl
-		mov minutosb[0],bl
-		inc si
-		mov bl, Top10_jogadores[si]
-		mov dl, minutosb[1]
-		mov Top10_jogadores[si],dl
-		mov minutosb[0],bl
-		add si,2
-		mov bl, Top10_jogadores[si]
-		mov dl, segundosb[0]
-		mov Top10_jogadores[si],dl
-		mov segundosb[0],bl
-		inc si
-		mov bl, Top10_jogadores[si]
-		mov dl, segundosb[1]
-		mov Top10_jogadores[si],dl
-		mov segundosb[1],bl
-		add si, 4
-		mov di,2
-
-	ciclo3:
-		
-		mov al,Top10_jogadores[si]
-		mov dl, nome_jogador[di]
-		mov Top10_jogadores[si],dl
-		mov nome_jogador[di],al
-		inc di
-		inc si
-		cmp di,10
-		jne ciclo3
-		inc line
-		jmp substitui_jogador
-	;******************************************************
-	; caso aja espaços em branco, vai preencher diretamente
-	; com o jogador no final 
-	;******************************************************			
-	preenche_novo_jogador:
-		
-		mov bl, minutosb[0]
-		mov Top10_jogadores[si],bl
-		inc si
-		mov bl, minutosb[1]
-		mov Top10_jogadores[si],bl
-		add si,2
-		mov bl, segundosb[0]
-		mov Top10_jogadores[si],bl
-		inc si
-		mov bl, segundosb[1]
-		mov Top10_jogadores[si],bl
-		add si, 4
-		mov di,2
-
-	ciclo2:
-		mov al,nome_jogador[di]
-		mov Top10_jogadores[si],al
-		inc di
-		inc si
-		cmp di,10
-		jne ciclo2
-		jmp fim_preenche
-	;******************************************************
-	; se nao verifica nenhuma das duas ocorrencias
-	; incrementa linha para ir para a proxima 
-	;******************************************************
-	inc_linha_substitui:
-		inc line
-		jmp espacos_vazios
-		
-	fim_preenche:
+		escreve1:
 			
-		pop si
-		pop di
-		pop bx
-		pop ax
-		ret
+			mov bl, line
+			mov al,total_bytes
+			mul bl
+			mov si, ax
+			inc si
+			mov bl, Top10_jogadores[si]
+			mov dl, minutosb[0]
+			mov Top10_jogadores[si],dl
+			mov minutosb[0],bl
+			inc si
+			mov bl, Top10_jogadores[si]
+			mov dl, minutosb[1]
+			mov Top10_jogadores[si],dl
+			mov minutosb[0],bl
+			add si,2
+			mov bl, Top10_jogadores[si]
+			mov dl, segundosb[0]
+			mov Top10_jogadores[si],dl
+			mov segundosb[0],bl
+			inc si
+			mov bl, Top10_jogadores[si]
+			mov dl, segundosb[1]
+			mov Top10_jogadores[si],dl
+			mov segundosb[1],bl
+			add si, 4
+			mov di,2
+
+		ciclo3:
+			
+			mov al,Top10_jogadores[si]
+			mov dl, nome_jogador[di]
+			mov Top10_jogadores[si],dl
+			mov nome_jogador[di],al
+			inc di
+			inc si
+			cmp di,10
+			jne ciclo3
+			inc line
+			jmp espacos_vazios
+
+		;inc_linha_substitui:
+			;inc line
+			;jmp espacos_vazios
+			
+		fim_preenche:
+				
+			pop si
+			pop di
+			pop bx
+			pop ax
+			ret
 		
-top10_incrementa_novo_jogador ENDP
+top10_incrementa_novo_jogador endp
 
 ;########################################################################
 ;									Menus
