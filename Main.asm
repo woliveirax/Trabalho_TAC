@@ -29,6 +29,15 @@ dseg	segment para public 'data'
 						db	'Selecione uma opcao: ',13,10
 						db	'$',0
 
+		menuJogar		db	80 dup ('_'),13,10,10
+						db  '				Modo de Jogo',13,10,10
+						db	80 dup ('_'),13,10,10
+    					db 	'			  1. Jogar Normal.',13,10,10
+						db 	'			  2. Jogar com hexadecimais (EXTRA).',13,10,10
+						db 	'			  3. Voltar.',10,10,10
+						db	'Selecione uma opcao: ',13,10
+						db	'$',0
+
 	    tecla			db	?	;variavel que irá conter a escolha do utilizador!
 		
 		;####################################################################################################################
@@ -2272,6 +2281,47 @@ display_options_menu proc
 
 display_options_menu endp
 
+display_menu_jogar proc
+	menu_loop:
+			call apaga_ecran
+			goto_xy 0,0
+
+			;mostra menu
+			mov  ah,09h
+			lea  dx,menuJogar
+			int  21h
+			
+			;Pede input ao utilizador.
+			goto_xy	21,15
+
+			mov ah,0
+			call LE_TECLA	;obtem tecla e poe em AL
+			mov tecla, al
+
+			cmp tecla,49
+			je	jogo_normal
+
+			cmp tecla,50
+			je	jogo_extra
+
+			cmp tecla,51
+			je	fim
+			
+			jmp menu_loop
+
+	jogo_normal:
+			call jogo
+			jmp menu_loop
+
+	jogo_extra:
+			call jogo_alternativo
+			jmp	menu_loop
+
+	fim:
+			ret
+
+display_menu_jogar endp
+
 main_menu proc
 
 	menu_loop:
@@ -2292,7 +2342,7 @@ main_menu proc
 			mov tecla, al	;move a tecla para AL	
 
 			cmp	tecla,49
-			je	gameNormal
+			je	menu_jogar
 
 			cmp tecla,50
 			je	opcoes
@@ -2304,8 +2354,8 @@ main_menu proc
 			je	fim
 			jmp menu_loop
 
-	gameNormal:
-			call jogo_alternativo
+	menu_jogar:
+			call display_menu_jogar
 			jmp	menu_loop
 
 	opcoes:
